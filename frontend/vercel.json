@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://eng-learner-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
