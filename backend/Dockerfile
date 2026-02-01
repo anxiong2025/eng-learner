@@ -24,8 +24,15 @@ FROM debian:trixie-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies including yt-dlp for YouTube video parsing
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    python3 \
+    python3-pip \
+    ffmpeg \
+    && pip3 install --break-system-packages yt-dlp \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary
 COPY --from=builder /app/target/release/eng-learner-backend .
