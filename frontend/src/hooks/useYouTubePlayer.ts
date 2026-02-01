@@ -18,6 +18,8 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
   const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<number | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const { setCurrentTime, setPlayerState } = useVideoStore();
 
@@ -29,6 +31,10 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
 
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
+    tag.onerror = () => {
+      setError('Failed to load YouTube player. Please check your network connection.');
+      setIsLoading(false);
+    };
     const firstScriptTag = document.getElementsByTagName('script')[0];
     firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
   }, []);
@@ -37,7 +43,19 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
   useEffect(() => {
     if (!videoId || !containerRef.current) return;
 
+    setIsLoading(true);
+    setError(null);
+
+    // Timeout for API loading (15 seconds)
+    const timeoutId = setTimeout(() => {
+      if (isLoading && !error) {
+        setError('YouTube player loading timeout. Please refresh and try again.');
+        setIsLoading(false);
+      }
+    }, 15000);
+
     const initPlayer = () => {
+      clearTimeout(timeoutId);
       if (playerRef.current) {
         playerRef.current.destroy();
       }
@@ -55,7 +73,19 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
         events: {
           onReady: () => {
             setIsReady(true);
+            setIsLoading(false);
             onReady?.();
+          },
+          onError: (event) => {
+            setIsLoading(false);
+            const errorCodes: Record<number, string> = {
+              2: 'Invalid video ID',
+              5: 'HTML5 player error',
+              100: 'Video not found',
+              101: 'Embedding not allowed',
+              150: 'Embedding not allowed',
+            };
+            setError(errorCodes[event.data] || `YouTube error: ${event.data}`);
           },
           onStateChange: (event) => {
             switch (event.data) {
@@ -89,6 +119,7 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
     }
 
     return () => {
+      clearTimeout(timeoutId);
       stopTimeTracking();
       if (playerRef.current) {
         playerRef.current.destroy();
@@ -139,6 +170,8 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
   return {
     containerRef,
     isReady,
+    isLoading,
+    error,
     seekTo,
     play,
     pause,

@@ -36,7 +36,7 @@ pub struct SaveVocabularyRequest {
 
 #[derive(Serialize)]
 pub struct SaveVocabularyResponse {
-    id: i64,
+    id: i32,
 }
 
 async fn save_vocabulary(

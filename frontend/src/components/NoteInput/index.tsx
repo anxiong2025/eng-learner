@@ -12,7 +12,7 @@ interface NoteInputProps {
 
 export function NoteInput({
   onSubmit,
-  placeholder = '现在的想法是...',
+  placeholder = 'Your thoughts...',
   className,
   disabled = false,
   onLoginRequired
@@ -189,7 +189,7 @@ export function NoteInput({
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
-              title={images.length >= 2 ? "最多插入2张图片" : "插入图片"}
+              title={images.length >= 2 ? "Max 2 images" : "Add image"}
             >
               <ImagePlus className="w-5 h-5" />
             </button>
@@ -208,7 +208,7 @@ export function NoteInput({
                 ? 'text-primary hover:bg-primary/10'
                 : 'text-muted-foreground/30 cursor-not-allowed'
             )}
-            title="发送"
+            title="Send"
           >
             <ArrowUp className="w-5 h-5" />
           </button>

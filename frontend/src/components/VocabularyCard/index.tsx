@@ -7,11 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import type { VocabularyItem } from '@/types';
 
 const levelColors: Record<string, string> = {
-  '雅思': 'bg-purple-100 text-purple-700 border-purple-200',
-  '托福': 'bg-blue-100 text-blue-700 border-blue-200',
-  '四级': 'bg-green-100 text-green-700 border-green-200',
-  '六级': 'bg-amber-100 text-amber-700 border-amber-200',
-  '日常': 'bg-gray-100 text-gray-700 border-gray-200',
+  'IELTS': 'bg-purple-100 text-purple-700 border-purple-200',
+  'TOEFL': 'bg-blue-100 text-blue-700 border-blue-200',
+  'CET-4': 'bg-green-100 text-green-700 border-green-200',
+  'CET-6': 'bg-amber-100 text-amber-700 border-amber-200',
+  'Basic': 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
 // Speak word using Youdao Dictionary audio
@@ -84,7 +84,7 @@ export function VocabularyCard() {
       <CardHeader className="pb-2 px-4">
         <CardTitle className="text-sm flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-emerald-500" />
-          重点词汇
+          Key Vocabulary
           {isLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
         </CardTitle>
       </CardHeader>
@@ -92,7 +92,7 @@ export function VocabularyCard() {
         {vocabulary.length === 0 && !isLoading ? (
           <div className="text-center py-6 text-muted-foreground text-sm">
             <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p>当前句子暂无重点词汇</p>
+            <p>No key vocabulary in current sentence</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -112,7 +112,7 @@ export function VocabularyCard() {
                         <button
                           onClick={() => speakWord(item.word)}
                           className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-                          title="朗读单词"
+                          title="Pronounce"
                         >
                           <Volume2 className="w-3.5 h-3.5" />
                         </button>
@@ -124,7 +124,7 @@ export function VocabularyCard() {
                               ? 'text-amber-500'
                               : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50'
                           }`}
-                          title={isSaved ? '已收藏' : '收藏单词'}
+                          title={isSaved ? 'Saved' : 'Save word'}
                         >
                           {isSaving ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -134,7 +134,7 @@ export function VocabularyCard() {
                         </button>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] px-1.5 py-0 ${levelColors[item.level] || levelColors['日常']}`}
+                          className={`text-[10px] px-1.5 py-0 ${levelColors[item.level] || levelColors['Basic']}`}
                         >
                           {item.level}
                         </Badge>

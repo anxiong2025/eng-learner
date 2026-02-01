@@ -22,7 +22,7 @@ const MAX_HISTORY_ITEMS = 10;
 
 export const useWatchHistoryStore = create<WatchHistoryState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       history: [],
       isLoading: false,
 

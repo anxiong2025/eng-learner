@@ -63,12 +63,11 @@ pub struct VocabularyItem {
 /// Slide structure for presentation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Slide {
-    pub slide_type: String, // "title", "content", "summary", "quote"
+    pub slide_type: String, // "title", "content", "summary"
     pub title: String,
     pub subtitle: Option<String>,
     pub bullets: Vec<String>,
     pub notes: Option<String>, // Speaker notes
-    pub quote: Option<String>, // For quote slides
 }
 
 /// Chapter/section of a video for table of contents
@@ -421,73 +420,32 @@ Response (JSON array only):"#,
 
     async fn generate_slides(&self, title: &str, content: &str) -> Result<Vec<Slide>> {
         let prompt = format!(
-            r#"你是一位专业的演示文稿设计师。请基于以下视频内容，生成一套高质量的演示幻灯片。
+            r#"Generate presentation slides based on video content to help users quickly understand and review the key points.
 
-视频标题: {}
+Video Title: {}
 
-视频字幕内容:
+Content:
 {}
 
-## 幻灯片设计要求
+## Requirements
 
-### 结构要求：
-1. 总共生成 8-12 页幻灯片
-2. 第1页：标题页（slide_type: "title"）
-3. 第2-N页：内容页（slide_type: "content"）
-4. 可以穿插1-2页引用页（slide_type: "quote"）- 引用视频中的精彩原句
-5. 最后1页：总结页（slide_type: "summary"）
+1. Create 8-12 slides with rich content
+2. Structure: Title slide + 6-10 content slides + Summary slide
+3. Each slide should have 3-5 bullet points, each expressing a complete idea
+4. Bullet points should be specific and informative, avoid vague statements
+5. Write in English
+6. Use notes field for key details or examples (1-2 sentences)
 
-### 内容要求：
-1. 每页内容页最多3-4个要点（bullets）
-2. 每个要点简洁有力，不超过20个字
-3. 标题要吸引人，概括该页核心主题
-4. 演讲者备注（notes）要详细，包含展开说明和过渡语
-5. 用中文输出，但保留重要的英文术语和关键词
-
-### 引用页要求：
-- quote字段放原文（英文）
-- title放中文翻译或解读
-- 选择最有启发性或代表性的句子
-
-### JSON格式：
+### JSON Format:
 [
-  {{
-    "slide_type": "title",
-    "title": "主标题",
-    "subtitle": "副标题或演讲者/来源",
-    "bullets": [],
-    "notes": "开场白建议",
-    "quote": null
-  }},
-  {{
-    "slide_type": "content",
-    "title": "页面标题",
-    "subtitle": null,
-    "bullets": ["要点1", "要点2", "要点3"],
-    "notes": "这页的展开说明...",
-    "quote": null
-  }},
-  {{
-    "slide_type": "quote",
-    "title": "引用的中文解读",
-    "subtitle": null,
-    "bullets": [],
-    "notes": "关于这句话的背景说明",
-    "quote": "The original English quote from the video"
-  }},
-  {{
-    "slide_type": "summary",
-    "title": "总结",
-    "subtitle": null,
-    "bullets": ["核心收获1", "核心收获2", "核心收获3"],
-    "notes": "结语建议",
-    "quote": null
-  }}
+  {{"slide_type": "title", "title": "Main Title", "subtitle": "Speaker/Source", "bullets": [], "notes": null}},
+  {{"slide_type": "content", "title": "Key Point Title", "subtitle": null, "bullets": ["Complete description of the point", "Another informative bullet"], "notes": "Additional details or examples"}},
+  {{"slide_type": "summary", "title": "Key Takeaways", "subtitle": null, "bullets": ["Specific takeaway 1", "Specific takeaway 2"], "notes": null}}
 ]
 
-请直接输出JSON数组，不要其他解释："#,
+Output JSON array only:"#,
             title,
-            &content[..content.len().min(10000)] // Limit content length
+            &content[..content.len().min(12000)]
         );
 
         let response = self.call_gemini(&prompt).await?;
@@ -880,23 +838,25 @@ Output Markdown only:"#,
 
     async fn generate_slides(&self, title: &str, content: &str) -> Result<Vec<Slide>> {
         let prompt = format!(
-            r#"Generate professional presentation slides from this video content.
+            r#"Generate presentation slides based on video content.
+
 Title: {}
 Content: {}
 
 Requirements:
-- Generate 8-12 slides total
-- First slide: title (slide_type: "title")
-- Middle slides: content (slide_type: "content") with 3-4 bullets each
-- Include 1-2 quote slides (slide_type: "quote") with memorable quotes
-- Last slide: summary (slide_type: "summary")
-- Output in Chinese, keep important English terms
-- Include speaker notes
+- Create 8-12 slides with rich content
+- Structure: Title slide + 6-10 content slides + Summary slide
+- Each slide: 3-5 bullet points, each expressing a complete idea
+- Bullet points should be specific and informative
+- Write in English
+- Use notes field for key details or examples
 
-Return JSON array only:
-[{{"slide_type": "title", "title": "标题", "subtitle": "副标题", "bullets": [], "notes": "开场白", "quote": null}}]"#,
+Return JSON array:
+[{{"slide_type": "title", "title": "Main Title", "subtitle": "Source", "bullets": [], "notes": null}},
+{{"slide_type": "content", "title": "Key Point", "subtitle": null, "bullets": ["Complete description"], "notes": "Additional details"}},
+{{"slide_type": "summary", "title": "Key Takeaways", "subtitle": null, "bullets": ["Specific takeaway"], "notes": null}}]"#,
             title,
-            &content[..content.len().min(8000)]
+            &content[..content.len().min(12000)]
         );
 
         let response = self.call_claude(&prompt).await?;
@@ -1204,23 +1164,25 @@ Output Markdown only:"#,
 
     async fn generate_slides(&self, title: &str, content: &str) -> Result<Vec<Slide>> {
         let prompt = format!(
-            r#"Generate professional presentation slides from this video content.
-Title: {}
+            r#"Generate presentation slides based on video content to help users quickly understand and review the key points.
+
+Video Title: {}
 Content: {}
 
 Requirements:
-- Generate 8-12 slides total
-- First slide: title (slide_type: "title")
-- Middle slides: content (slide_type: "content") with 3-4 bullets each
-- Include 1-2 quote slides (slide_type: "quote") with memorable quotes
-- Last slide: summary (slide_type: "summary")
-- Output in Chinese, keep important English terms
-- Include speaker notes
+- Create 8-12 slides with rich content
+- Structure: Title slide + 6-10 content slides + Summary slide
+- Each slide should have 3-5 bullet points, each expressing a complete idea
+- Bullet points should be specific and informative, avoid vague statements
+- Write in English
+- Use notes field for key details or examples (1-2 sentences)
 
-Return JSON array only:
-[{{"slide_type": "title", "title": "标题", "subtitle": "副标题", "bullets": [], "notes": "开场白", "quote": null}}]"#,
+Return JSON array:
+[{{"slide_type": "title", "title": "Main Title", "subtitle": "Speaker/Source", "bullets": [], "notes": null}},
+{{"slide_type": "content", "title": "Key Point Title", "subtitle": null, "bullets": ["Complete description of the point"], "notes": "Additional details"}},
+{{"slide_type": "summary", "title": "Key Takeaways", "subtitle": null, "bullets": ["Specific takeaway"], "notes": null}}]"#,
             title,
-            &content[..content.len().min(8000)]
+            &content[..content.len().min(12000)]
         );
 
         let response = self.call_openai(&prompt).await?;

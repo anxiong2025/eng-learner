@@ -4,10 +4,10 @@ import {
   Loader2,
   Check,
   Circle,
-  Download,
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Download,
 } from 'lucide-react';
 import { Transformer } from 'markmap-lib';
 import { Markmap } from 'markmap-view';
@@ -49,12 +49,14 @@ export function MindMapPanel() {
     setSteps(GENERATION_STEPS.map(s => ({ ...s, status: 'pending' })));
   };
 
-  const generateMap = useCallback(async () => {
+  const generateMap = useCallback(async (forceRegenerate = false) => {
     if (!videoInfo || subtitlesEn.length === 0) return;
 
     setIsGenerating(true);
     setError(null);
-    setMindMapContent(null);
+    if (forceRegenerate) {
+      setMindMapContent(null);
+    }
     resetSteps();
 
     try {
@@ -69,21 +71,27 @@ export function MindMapPanel() {
       updateStep('collect', 'done');
       updateStep('analyze', 'running');
 
-      const result = await generateMindMap(videoInfo.title, content);
+      const result = await generateMindMap(videoInfo.video_id, videoInfo.title, content, forceRegenerate);
 
-      updateStep('analyze', 'done');
-      updateStep('structure', 'running');
-      await new Promise(r => setTimeout(r, 200));
-      updateStep('structure', 'done');
+      // If cached result returned quickly, skip animation
+      if (result.cached) {
+        setMindMapContent(result.markdown);
+        setSteps(GENERATION_STEPS.map(s => ({ ...s, status: 'done' })));
+      } else {
+        updateStep('analyze', 'done');
+        updateStep('structure', 'running');
+        await new Promise(r => setTimeout(r, 200));
+        updateStep('structure', 'done');
 
-      updateStep('organize', 'running');
-      await new Promise(r => setTimeout(r, 200));
-      updateStep('organize', 'done');
+        updateStep('organize', 'running');
+        await new Promise(r => setTimeout(r, 200));
+        updateStep('organize', 'done');
 
-      updateStep('render', 'running');
-      setMindMapContent(result.markdown);
-      await new Promise(r => setTimeout(r, 300));
-      updateStep('render', 'done');
+        updateStep('render', 'running');
+        setMindMapContent(result.markdown);
+        await new Promise(r => setTimeout(r, 300));
+        updateStep('render', 'done');
+      }
 
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate mind map');
@@ -117,6 +125,18 @@ export function MindMapPanel() {
   const handleZoomOut = () => markmapRef.current?.rescale(0.8);
   const handleReset = () => markmapRef.current?.fit();
 
+  const handleDownload = () => {
+    if (!svgRef.current || !videoInfo) return;
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const blob = new Blob([svgData], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${videoInfo.title}-mindmap.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     if (!markmapRef.current || !svgRef.current) return;
@@ -140,53 +160,16 @@ export function MindMapPanel() {
     svgSelection.call((mm as any).zoom.transform, newTransform);
   }, []);
 
-  const handleDownload = async () => {
-    if (!svgRef.current) return;
-
-    const svg = svgRef.current;
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const bbox = svg.getBBox();
-    const width = Math.max(bbox.width + 100, 1200);
-    const height = Math.max(bbox.height + 100, 800);
-
-    const canvas = document.createElement('canvas');
-    const scale = 2;
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
-
-    const img = new Image();
-    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
-
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(svgUrl);
-
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const pngUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = pngUrl;
-        link.download = `mindmap-${videoInfo?.title || 'video'}.png`;
-        link.click();
-        URL.revokeObjectURL(pngUrl);
-      }, 'image/png');
-    };
-
-    img.src = svgUrl;
-  };
-
   const handleRegenerate = () => {
-    setMindMapContent(null);
-    generateMap();
+    generateMap(true); // Force regenerate, skip cache
   };
+
+  // Auto-load cached mind map on mount
+  useEffect(() => {
+    if (videoInfo && subtitlesEn.length > 0 && !mindMapContent && !isGenerating) {
+      generateMap(false); // Try to load from cache
+    }
+  }, [videoInfo?.video_id]); // Only run when video changes
 
   if (!videoInfo) {
     return (
@@ -258,11 +241,11 @@ export function MindMapPanel() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleReset}>
                 <RotateCcw className="w-3.5 h-3.5" />
               </Button>
-              <div className="w-px h-5 bg-border" />
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download SVG">
                 <Download className="w-3.5 h-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRegenerate}>
+              <div className="w-px h-5 bg-border" />
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRegenerate} title="Regenerate">
                 <Brain className="w-3.5 h-3.5" />
               </Button>
             </div>

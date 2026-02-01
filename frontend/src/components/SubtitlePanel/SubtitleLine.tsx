@@ -176,7 +176,7 @@ export function SubtitleLine({
               // Locked - show mask
               <div className="flex items-center gap-1.5 text-muted-foreground/40">
                 <Lock className="w-3 h-3" />
-                <span className="text-xs italic">播放后显示翻译</span>
+                <span className="text-xs italic">Play to reveal translation</span>
               </div>
             )}
           </div>

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { ArrowLeft, BookOpen, BarChart3 } from 'lucide-react';
+import { ArrowLeft, BookOpen, BarChart3, Github } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AuthDialog } from '@/components/AuthDialog';
 
@@ -52,6 +52,15 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
                   <BarChart3 className="w-4 h-4" />
                 </button>
               )}
+              <a
+                href="https://github.com/anxiong2025/eng-learner"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-9 w-9 sm:h-8 sm:w-8 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="GitHub"
+              >
+                <Github className="w-4 h-4" />
+              </a>
               <button
                 onClick={() => navigate('/about')}
                 className="px-2 h-8 text-sm text-muted-foreground hover:text-foreground transition-colors"

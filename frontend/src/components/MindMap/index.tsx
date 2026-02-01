@@ -30,11 +30,11 @@ interface GenerationStep {
 }
 
 const GENERATION_STEPS: GenerationStep[] = [
-  { id: 'collect', label: '收集字幕内容', status: 'pending' },
-  { id: 'analyze', label: 'AI 分析视频主题', status: 'pending' },
-  { id: 'structure', label: '提取关键知识点', status: 'pending' },
-  { id: 'organize', label: '组织层级结构', status: 'pending' },
-  { id: 'render', label: '渲染思维导图', status: 'pending' },
+  { id: 'collect', label: 'Collecting subtitles', status: 'pending' },
+  { id: 'analyze', label: 'AI analyzing topics', status: 'pending' },
+  { id: 'structure', label: 'Extracting key points', status: 'pending' },
+  { id: 'organize', label: 'Organizing structure', status: 'pending' },
+  { id: 'render', label: 'Rendering mind map', status: 'pending' },
 ];
 
 export function MindMap() {
@@ -83,6 +83,7 @@ export function MindMap() {
 
       // Call the API
       const result = await generateMindMap(
+        videoInfo.video_id,
         videoInfo.title,
         content
       );
@@ -214,17 +215,17 @@ export function MindMap() {
           variant="outline"
           size="sm"
           className="h-7 text-xs gap-1"
-          title="生成思维导图"
+          title="Generate Mind Map"
         >
           <Brain className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">导图</span>
+          <span className="hidden sm:inline">Map</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-violet-500" />
-            视频思维导图
+            Video Mind Map
           </DialogTitle>
         </DialogHeader>
 
@@ -272,7 +273,7 @@ export function MindMap() {
                 className="ml-2 text-destructive"
                 onClick={handleRegenerate}
               >
-                重试
+                Retry
               </Button>
             </div>
           )}
@@ -312,10 +313,10 @@ export function MindMap() {
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <Brain className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-                  <p className="text-muted-foreground">点击生成思维导图</p>
+                  <p className="text-muted-foreground">Click to generate mind map</p>
                   <Button className="mt-4" onClick={generateMap}>
                     <Brain className="w-4 h-4 mr-2" />
-                    开始生成
+                    Generate
                   </Button>
                 </div>
               </div>

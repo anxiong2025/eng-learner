@@ -3,7 +3,7 @@ import { ArrowUp, Sparkles, Loader2, ChevronDown, StickyNote, Check } from 'luci
 import { useVideoStore } from '@/stores/videoStore';
 import { useAuthStore } from '@/store/authStore';
 import { useNoteStore } from '@/stores/noteStore';
-import { askAI } from '@/api/client';
+import { askAI, RateLimitError } from '@/api/client';
 import { ChatMessage } from './ChatMessage';
 import type { ChatMessage as ChatMessageType } from '@/types';
 import { AuthDialog } from '@/components/AuthDialog';
@@ -104,10 +104,13 @@ export function AIChat() {
       };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
+      const isRateLimited = error instanceof RateLimitError;
       const errorMessage: ChatMessageType = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: isRateLimited
+          ? 'Daily AI chat limit reached (20/day). Please try again tomorrow.'
+          : 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);

@@ -23,10 +23,21 @@ pub async fn init_db() -> Result<DbPool> {
             avatar TEXT,
             provider TEXT NOT NULL,
             tier TEXT DEFAULT 'free',
+            invite_code TEXT UNIQUE,
+            bonus_quota INTEGER DEFAULT 0,
+            invited_by TEXT,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             last_login_at TIMESTAMPTZ
         )"
     ).execute(&pool).await?;
+
+    // Add invite columns if they don't exist (for existing databases)
+    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE")
+        .execute(&pool).await.ok();
+    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bonus_quota INTEGER DEFAULT 0")
+        .execute(&pool).await.ok();
+    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by TEXT")
+        .execute(&pool).await.ok();
 
     // Create vocabulary table
     sqlx::query(
@@ -128,6 +139,49 @@ pub async fn init_db() -> Result<DbPool> {
         "CREATE INDEX IF NOT EXISTS idx_watch_history_user ON watch_history(user_id, watched_at DESC)"
     ).execute(&pool).await?;
 
+    // Create daily usage table for rate limiting
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS daily_usage (
+            id SERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            video_parse_count INTEGER DEFAULT 0,
+            ai_chat_count INTEGER DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(user_id, date)
+        )"
+    ).execute(&pool).await?;
+
+    // Migration: Add ai_chat_count column if not exists
+    sqlx::query(
+        "ALTER TABLE daily_usage ADD COLUMN IF NOT EXISTS ai_chat_count INTEGER DEFAULT 0"
+    ).execute(&pool).await.ok(); // Ignore error if column exists
+
+    // Create index on daily usage
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_daily_usage_user_date ON daily_usage(user_id, date)"
+    ).execute(&pool).await?;
+
+    // Create video mindmap cache table
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS video_mindmaps (
+            id SERIAL PRIMARY KEY,
+            video_id TEXT UNIQUE NOT NULL,
+            markdown TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )"
+    ).execute(&pool).await?;
+
+    // Create video slides cache table
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS video_slides (
+            id SERIAL PRIMARY KEY,
+            video_id TEXT UNIQUE NOT NULL,
+            slides_json TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )"
+    ).execute(&pool).await?;
+
     // Initialize default user progress
     sqlx::query(
         "INSERT INTO user_progress (user_id) VALUES ('default') ON CONFLICT DO NOTHING"
@@ -147,28 +201,62 @@ pub struct User {
     pub avatar: Option<String>,
     pub provider: String,
     pub tier: String,
+    pub invite_code: Option<String>,
+    pub bonus_quota: i32,
+    pub invited_by: Option<String>,
     pub created_at: Option<String>,
     pub last_login_at: Option<String>,
 }
 
-pub async fn upsert_user(pool: &DbPool, user: &User) -> Result<()> {
-    let now = Utc::now();
+/// Generate a unique invite code
+fn generate_invite_code() -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let hasher = RandomState::new().build_hasher();
+    let hash = hasher.finish();
+    format!("{:X}", hash)[..8].to_string()
+}
 
-    sqlx::query(
-        "INSERT INTO users (id, email, name, avatar, provider, tier, created_at, last_login_at)
-         VALUES ($1, $2, $3, $4, $5, 'free', $6, $6)
-         ON CONFLICT(id) DO UPDATE SET
-            name = $3,
-            avatar = $4,
-            last_login_at = $6"
-    )
-    .bind(&user.id)
-    .bind(&user.email)
-    .bind(&user.name)
-    .bind(&user.avatar)
-    .bind(&user.provider)
-    .bind(now)
-    .execute(pool).await?;
+pub async fn upsert_user(pool: &DbPool, user: &User, ref_code: Option<&str>) -> Result<()> {
+    let now = Utc::now();
+    let invite_code = generate_invite_code();
+
+    // Check if user already exists
+    let existing = sqlx::query("SELECT id FROM users WHERE id = $1")
+        .bind(&user.id)
+        .fetch_optional(pool).await?;
+
+    if existing.is_some() {
+        // Update existing user
+        sqlx::query(
+            "UPDATE users SET name = $1, avatar = $2, last_login_at = $3 WHERE id = $4"
+        )
+        .bind(&user.name)
+        .bind(&user.avatar)
+        .bind(now)
+        .bind(&user.id)
+        .execute(pool).await?;
+    } else {
+        // Insert new user with invite code
+        sqlx::query(
+            "INSERT INTO users (id, email, name, avatar, provider, tier, invite_code, bonus_quota, invited_by, created_at, last_login_at)
+             VALUES ($1, $2, $3, $4, $5, 'free', $6, 0, $7, $8, $8)"
+        )
+        .bind(&user.id)
+        .bind(&user.email)
+        .bind(&user.name)
+        .bind(&user.avatar)
+        .bind(&user.provider)
+        .bind(&invite_code)
+        .bind(ref_code)
+        .bind(now)
+        .execute(pool).await?;
+
+        // If this user was invited, give the inviter bonus quota
+        if let Some(code) = ref_code {
+            add_bonus_quota_by_invite_code(pool, code, 3).await?;
+        }
+    }
 
     // Initialize user progress
     sqlx::query(
@@ -182,7 +270,8 @@ pub async fn upsert_user(pool: &DbPool, user: &User) -> Result<()> {
 
 pub async fn get_user(pool: &DbPool, user_id: &str) -> Result<Option<User>> {
     let result = sqlx::query(
-        "SELECT id, email, name, avatar, provider, tier,
+        "SELECT id, email, name, avatar, provider, tier, invite_code,
+                COALESCE(bonus_quota, 0) as bonus_quota, invited_by,
                 to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
                 to_char(last_login_at, 'YYYY-MM-DD HH24:MI:SS') as last_login_at
          FROM users WHERE id = $1"
@@ -197,9 +286,76 @@ pub async fn get_user(pool: &DbPool, user_id: &str) -> Result<Option<User>> {
         avatar: row.get("avatar"),
         provider: row.get("provider"),
         tier: row.get("tier"),
+        invite_code: row.get("invite_code"),
+        bonus_quota: row.get("bonus_quota"),
+        invited_by: row.get("invited_by"),
         created_at: row.get("created_at"),
         last_login_at: row.get("last_login_at"),
     }))
+}
+
+/// Add bonus quota to a user by their invite code
+pub async fn add_bonus_quota_by_invite_code(pool: &DbPool, invite_code: &str, amount: i32) -> Result<()> {
+    sqlx::query(
+        "UPDATE users SET bonus_quota = COALESCE(bonus_quota, 0) + $1 WHERE invite_code = $2"
+    )
+    .bind(amount)
+    .bind(invite_code)
+    .execute(pool).await?;
+    Ok(())
+}
+
+/// Get user's invite code (generate if not exists)
+pub async fn get_or_create_invite_code(pool: &DbPool, user_id: &str) -> Result<String> {
+    // First check if user has an invite code
+    let result = sqlx::query("SELECT invite_code FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(pool).await?;
+
+    if let Some(row) = result {
+        if let Some(code) = row.get::<Option<String>, _>("invite_code") {
+            return Ok(code);
+        }
+    }
+
+    // Generate and set a new invite code
+    let new_code = generate_invite_code();
+    sqlx::query("UPDATE users SET invite_code = $1 WHERE id = $2")
+        .bind(&new_code)
+        .bind(user_id)
+        .execute(pool).await?;
+
+    Ok(new_code)
+}
+
+/// Get count of users invited by this user
+pub async fn get_invite_count(pool: &DbPool, user_id: &str) -> Result<i32> {
+    // Get the user's invite code first
+    let result = sqlx::query("SELECT invite_code FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(pool).await?;
+
+    let invite_code = match result.and_then(|row| row.get::<Option<String>, _>("invite_code")) {
+        Some(code) => code,
+        None => return Ok(0),
+    };
+
+    // Count users who have this invite code as their invited_by
+    let count: i64 = sqlx::query("SELECT COUNT(*) as count FROM users WHERE invited_by = $1")
+        .bind(&invite_code)
+        .fetch_one(pool).await?
+        .get("count");
+
+    Ok(count as i32)
+}
+
+/// Get user's bonus quota
+pub async fn get_bonus_quota(pool: &DbPool, user_id: &str) -> Result<i32> {
+    let result = sqlx::query("SELECT COALESCE(bonus_quota, 0) as bonus_quota FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(pool).await?;
+
+    Ok(result.map(|row| row.get::<i32, _>("bonus_quota")).unwrap_or(0))
 }
 
 // ============ Vocabulary Functions ============
@@ -270,7 +426,7 @@ pub async fn save_vocabulary(
     example: Option<&str>,
     source_video_id: Option<&str>,
     source_sentence: Option<&str>,
-) -> Result<i64> {
+) -> Result<i32> {
     // Insert or get vocabulary
     sqlx::query(
         "INSERT INTO vocabulary (word, meaning, level, example) VALUES ($1, $2, $3, $4)
@@ -282,7 +438,7 @@ pub async fn save_vocabulary(
     .bind(example)
     .execute(pool).await?;
 
-    let vocab_id: i64 = sqlx::query("SELECT id FROM vocabulary WHERE word = $1")
+    let vocab_id: i32 = sqlx::query("SELECT id FROM vocabulary WHERE word = $1")
         .bind(word)
         .fetch_one(pool).await?
         .get("id");
@@ -829,5 +985,229 @@ pub async fn clear_watch_history(pool: &DbPool, user_id: &str) -> Result<()> {
     sqlx::query("DELETE FROM watch_history WHERE user_id = $1")
         .bind(user_id)
         .execute(pool).await?;
+    Ok(())
+}
+
+// ============ Daily Usage / Rate Limiting Functions ============
+
+/// Base daily free quota (resets each day)
+pub const FREE_DAILY_BASE_LIMIT: i32 = 3;
+/// Bonus quota per successful invite (permanent, cumulative)
+pub const INVITE_BONUS_QUOTA: i32 = 3;
+/// AI Chat daily limit (per user)
+pub const AI_CHAT_DAILY_LIMIT: i32 = 20;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UsageStatus {
+    pub used: i32,
+    pub limit: i32,
+    pub remaining: i32,
+    pub bonus_quota: i32,  // From invitations (permanent)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AiChatUsageStatus {
+    pub used: i32,
+    pub limit: i32,
+    pub remaining: i32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DailyUsageStatus {
+    pub video_parse: UsageStatus,
+    pub ai_chat: AiChatUsageStatus,
+}
+
+/// Get today's usage for a user (includes bonus quota from invitations)
+pub async fn get_daily_usage(pool: &DbPool, user_id: &str) -> Result<DailyUsageStatus> {
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    // Get today's usage count
+    let usage_result = sqlx::query(
+        "SELECT video_parse_count, ai_chat_count FROM daily_usage WHERE user_id = $1 AND date = $2"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .fetch_optional(pool).await?;
+
+    let (video_used, ai_chat_used) = usage_result
+        .map(|row| (
+            row.get::<i32, _>("video_parse_count"),
+            row.get::<i32, _>("ai_chat_count")
+        ))
+        .unwrap_or((0, 0));
+
+    // Get user's bonus quota from invitations
+    let bonus_quota = get_bonus_quota(pool, user_id).await.unwrap_or(0);
+
+    // Total daily limit = base + bonus
+    let total_limit = FREE_DAILY_BASE_LIMIT + bonus_quota;
+
+    Ok(DailyUsageStatus {
+        video_parse: UsageStatus {
+            used: video_used,
+            limit: total_limit,
+            remaining: (total_limit - video_used).max(0),
+            bonus_quota,
+        },
+        ai_chat: AiChatUsageStatus {
+            used: ai_chat_used,
+            limit: AI_CHAT_DAILY_LIMIT,
+            remaining: (AI_CHAT_DAILY_LIMIT - ai_chat_used).max(0),
+        },
+    })
+}
+
+/// Check if user can perform video parse (based on tier, usage, and bonus quota)
+/// Returns (allowed, remaining_after)
+pub async fn check_can_parse_video(pool: &DbPool, user_id: &str, tier: &str) -> Result<(bool, i32)> {
+    // Pro users have unlimited access
+    if tier == "pro" {
+        return Ok((true, -1)); // -1 means unlimited
+    }
+
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    // Get today's usage count
+    let usage_result = sqlx::query(
+        "SELECT video_parse_count FROM daily_usage WHERE user_id = $1 AND date = $2"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .fetch_optional(pool).await?;
+
+    let used = usage_result.map(|row| row.get::<i32, _>("video_parse_count")).unwrap_or(0);
+
+    // Get user's bonus quota from invitations
+    let bonus_quota = get_bonus_quota(pool, user_id).await.unwrap_or(0);
+
+    // Total daily limit = base + bonus
+    let total_limit = FREE_DAILY_BASE_LIMIT + bonus_quota;
+    let remaining = total_limit - used;
+
+    Ok((remaining > 0, remaining - 1))
+}
+
+/// Increment video parse count for a user
+pub async fn increment_video_parse_count(pool: &DbPool, user_id: &str) -> Result<i32> {
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    sqlx::query(
+        "INSERT INTO daily_usage (user_id, date, video_parse_count)
+         VALUES ($1, $2, 1)
+         ON CONFLICT(user_id, date) DO UPDATE SET video_parse_count = daily_usage.video_parse_count + 1"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .execute(pool).await?;
+
+    // Return new count
+    let result = sqlx::query(
+        "SELECT video_parse_count FROM daily_usage WHERE user_id = $1 AND date = $2"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .fetch_one(pool).await?;
+
+    Ok(result.get("video_parse_count"))
+}
+
+/// Check if user can use AI chat
+/// Returns (allowed, remaining_after)
+pub async fn check_can_ai_chat(pool: &DbPool, user_id: &str, tier: &str) -> Result<(bool, i32)> {
+    // Pro users have unlimited access
+    if tier == "pro" {
+        return Ok((true, -1)); // -1 means unlimited
+    }
+
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    // Get today's AI chat count
+    let usage_result = sqlx::query(
+        "SELECT ai_chat_count FROM daily_usage WHERE user_id = $1 AND date = $2"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .fetch_optional(pool).await?;
+
+    let used = usage_result.map(|row| row.get::<i32, _>("ai_chat_count")).unwrap_or(0);
+    let remaining = AI_CHAT_DAILY_LIMIT - used;
+
+    Ok((remaining > 0, remaining - 1))
+}
+
+/// Increment AI chat count for a user
+pub async fn increment_ai_chat_count(pool: &DbPool, user_id: &str) -> Result<i32> {
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    sqlx::query(
+        "INSERT INTO daily_usage (user_id, date, ai_chat_count)
+         VALUES ($1, $2, 1)
+         ON CONFLICT(user_id, date) DO UPDATE SET ai_chat_count = daily_usage.ai_chat_count + 1"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .execute(pool).await?;
+
+    // Return new count
+    let result = sqlx::query(
+        "SELECT ai_chat_count FROM daily_usage WHERE user_id = $1 AND date = $2"
+    )
+    .bind(user_id)
+    .bind(&today)
+    .fetch_one(pool).await?;
+
+    Ok(result.get("ai_chat_count"))
+}
+
+// ============ AI Content Cache Functions ============
+
+/// Get cached mindmap for a video
+pub async fn get_cached_mindmap(pool: &DbPool, video_id: &str) -> Result<Option<String>> {
+    let result = sqlx::query(
+        "SELECT markdown FROM video_mindmaps WHERE video_id = $1"
+    )
+    .bind(video_id)
+    .fetch_optional(pool).await?;
+
+    Ok(result.map(|row| row.get("markdown")))
+}
+
+/// Save mindmap to cache
+pub async fn save_mindmap_cache(pool: &DbPool, video_id: &str, markdown: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO video_mindmaps (video_id, markdown)
+         VALUES ($1, $2)
+         ON CONFLICT(video_id) DO UPDATE SET markdown = $2, created_at = NOW()"
+    )
+    .bind(video_id)
+    .bind(markdown)
+    .execute(pool).await?;
+
+    Ok(())
+}
+
+/// Get cached slides for a video
+pub async fn get_cached_slides(pool: &DbPool, video_id: &str) -> Result<Option<String>> {
+    let result = sqlx::query(
+        "SELECT slides_json FROM video_slides WHERE video_id = $1"
+    )
+    .bind(video_id)
+    .fetch_optional(pool).await?;
+
+    Ok(result.map(|row| row.get("slides_json")))
+}
+
+/// Save slides to cache
+pub async fn save_slides_cache(pool: &DbPool, video_id: &str, slides_json: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO video_slides (video_id, slides_json)
+         VALUES ($1, $2)
+         ON CONFLICT(video_id) DO UPDATE SET slides_json = $2, created_at = NOW()"
+    )
+    .bind(video_id)
+    .bind(slides_json)
+    .execute(pool).await?;
+
     Ok(())
 }

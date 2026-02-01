@@ -13,7 +13,7 @@ use crate::db::{self, DbPool, User};
 pub struct OAuthCallback {
     code: String,
     #[serde(default)]
-    state: Option<String>,
+    state: Option<String>,  // Contains ref_code for invitation tracking
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -92,35 +92,49 @@ async fn get_current_user(auth: AuthUser) -> impl IntoResponse {
     })
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AuthQuery {
+    #[serde(default)]
+    ref_code: Option<String>,  // Invite code for referral tracking
+}
+
 // Redirect to Google OAuth
-async fn google_auth() -> impl IntoResponse {
+async fn google_auth(Query(query): Query<AuthQuery>) -> impl IntoResponse {
     let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
     let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI")
         .unwrap_or_else(|_| "http://localhost:3001/api/auth/callback/google".to_string());
     let scope = "openid email profile";
 
+    // Pass ref_code through state parameter
+    let state = query.ref_code.unwrap_or_default();
+
     let auth_url = format!(
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline",
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&state={}",
         client_id,
         urlencoding::encode(&redirect_uri),
-        urlencoding::encode(scope)
+        urlencoding::encode(scope),
+        urlencoding::encode(&state)
     );
 
     Redirect::temporary(&auth_url)
 }
 
 // Redirect to GitHub OAuth
-async fn github_auth() -> impl IntoResponse {
+async fn github_auth(Query(query): Query<AuthQuery>) -> impl IntoResponse {
     let client_id = std::env::var("GITHUB_CLIENT_ID").unwrap_or_default();
     let redirect_uri = std::env::var("GITHUB_REDIRECT_URI")
         .unwrap_or_else(|_| "http://localhost:3001/api/auth/callback/github".to_string());
     let scope = "user:email";
 
+    // Pass ref_code through state parameter
+    let state = query.ref_code.unwrap_or_default();
+
     let auth_url = format!(
-        "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}&scope={}",
+        "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}&scope={}&state={}",
         client_id,
         urlencoding::encode(&redirect_uri),
-        urlencoding::encode(scope)
+        urlencoding::encode(scope),
+        urlencoding::encode(&state)
     );
 
     Redirect::temporary(&auth_url)
@@ -195,12 +209,18 @@ async fn google_callback(
         avatar: user_info.picture.clone(),
         provider: "google".to_string(),
         tier: "free".to_string(),
+        invite_code: None,
+        bonus_quota: 0,
+        invited_by: None,
         created_at: None,
         last_login_at: None,
     };
 
-    // Save user to database
-    if let Err(e) = db::upsert_user(&db_pool, &user).await {
+    // Extract ref_code from state parameter
+    let ref_code = params.state.as_deref().filter(|s| !s.is_empty());
+
+    // Save user to database (with referral tracking)
+    if let Err(e) = db::upsert_user(&db_pool, &user, ref_code).await {
         tracing::error!("Failed to save user to database: {}", e);
         return Redirect::temporary(&format!("{}?error=db_error", frontend_url));
     }
@@ -318,12 +338,18 @@ async fn github_callback(
         avatar: user_info.avatar_url.clone(),
         provider: "github".to_string(),
         tier: "free".to_string(),
+        invite_code: None,
+        bonus_quota: 0,
+        invited_by: None,
         created_at: None,
         last_login_at: None,
     };
 
-    // Save user to database
-    if let Err(e) = db::upsert_user(&db_pool, &user).await {
+    // Extract ref_code from state parameter
+    let ref_code = params.state.as_deref().filter(|s| !s.is_empty());
+
+    // Save user to database (with referral tracking)
+    if let Err(e) = db::upsert_user(&db_pool, &user, ref_code).await {
         tracing::error!("Failed to save user to database: {}", e);
         return Redirect::temporary(&format!("{}?error=db_error", frontend_url));
     }

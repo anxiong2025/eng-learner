@@ -1,10 +1,12 @@
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     routing::{get, post},
     Json, Router,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
+use crate::auth::OptionalAuthUser;
+use crate::db::{self, DbPool};
 use crate::models::{ApiResponse, SubtitleResponse, VideoInfo};
 use crate::services::youtube;
 
@@ -18,16 +20,50 @@ pub struct SubtitleQuery {
     lang: Option<String>,
 }
 
-pub fn routes() -> Router {
+#[derive(Serialize)]
+pub struct ParseVideoResponse {
+    #[serde(flatten)]
+    pub video_info: VideoInfo,
+    pub usage: UsageInfo,
+}
+
+#[derive(Serialize)]
+pub struct UsageInfo {
+    pub remaining: i32,
+}
+
+pub fn routes(db_pool: DbPool) -> Router {
     Router::new()
         .route("/parse", post(parse_video))
         .route("/:video_id/subtitles", get(get_subtitles))
+        .with_state(db_pool)
 }
 
 async fn parse_video(
+    State(pool): State<DbPool>,
+    auth: OptionalAuthUser,
     Json(payload): Json<ParseRequest>,
-) -> Json<ApiResponse<VideoInfo>> {
+) -> Json<ApiResponse<ParseVideoResponse>> {
+    let user_id = auth.user_id_or_default();
+    let tier = auth.tier_or_default();
     let url = payload.url.trim();
+
+    // Check rate limit
+    let (can_parse, remaining) = match db::check_can_parse_video(&pool, user_id, tier).await {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::error!("Failed to check usage limit: {}", e);
+            // On error, allow the request but log it
+            (true, -1)
+        }
+    };
+
+    if !can_parse {
+        return Json(ApiResponse::error_with_code(
+            "RATE_LIMIT_EXCEEDED".to_string(),
+            "Daily limit reached. Free users can parse 5 videos per day.".to_string(),
+        ));
+    }
 
     // Validate URL
     if !url.contains("youtube.com") && !url.contains("youtu.be") {
@@ -42,7 +78,22 @@ async fn parse_video(
 
     // Fetch video info
     match youtube::fetch_video_info(&video_id).await {
-        Ok(info) => Json(ApiResponse::success(info)),
+        Ok(info) => {
+            // Increment usage count on success
+            if let Err(e) = db::increment_video_parse_count(&pool, user_id).await {
+                tracing::error!("Failed to increment usage count: {}", e);
+            }
+
+            // Calculate actual remaining after this request
+            let actual_remaining = if remaining < 0 { -1 } else { remaining };
+
+            Json(ApiResponse::success(ParseVideoResponse {
+                video_info: info,
+                usage: UsageInfo {
+                    remaining: actual_remaining,
+                },
+            }))
+        }
         Err(e) => Json(ApiResponse::error(format!("Failed to fetch video info: {}", e))),
     }
 }

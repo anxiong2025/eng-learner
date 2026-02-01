@@ -57,9 +57,19 @@ export async function analyzeHighlights(subtitles: Subtitle[]): Promise<AnalyzeR
   return response.data.data;
 }
 
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
 export async function askAI(context: string, question: string): Promise<AskResponse> {
   const response = await api.post<ApiResponse<AskResponse>>('/ai/ask', { context, question });
   if (!response.data.success || !response.data.data) {
+    if (response.data.code === 'RATE_LIMIT_EXCEEDED') {
+      throw new RateLimitError(response.data.error || 'Daily limit reached');
+    }
     throw new Error(response.data.error || 'Failed to get AI response');
   }
   return response.data.data;
@@ -88,12 +98,15 @@ export async function extractVocabulary(text: string): Promise<VocabularyRespons
 // Mind Map generation
 export interface MindMapResponse {
   markdown: string;
+  cached?: boolean;
 }
 
-export async function generateMindMap(title: string, content: string): Promise<MindMapResponse> {
+export async function generateMindMap(videoId: string, title: string, content: string, regenerate = false): Promise<MindMapResponse> {
   const response = await api.post<ApiResponse<MindMapResponse>>('/ai/mindmap', {
+    video_id: videoId,
     title,
     content,
+    regenerate,
   }, {
     timeout: 120000, // 2 minutes for complex analysis
   });
@@ -103,11 +116,17 @@ export async function generateMindMap(title: string, content: string): Promise<M
   return response.data.data;
 }
 
-// Slides generation
-export async function generateSlides(title: string, content: string): Promise<SlidesResponse> {
-  const response = await api.post<ApiResponse<SlidesResponse>>('/ai/slides', {
+// Slides generation (with caching)
+export interface SlidesResponseWithCache extends SlidesResponse {
+  cached?: boolean;
+}
+
+export async function generateSlides(videoId: string, title: string, content: string, regenerate = false): Promise<SlidesResponseWithCache> {
+  const response = await api.post<ApiResponse<SlidesResponseWithCache>>('/ai/slides', {
+    video_id: videoId,
     title,
     content,
+    regenerate,
   }, {
     timeout: 180000, // 3 minutes for slide generation
   });
@@ -441,6 +460,83 @@ export async function deleteWatchHistoryItem(videoId: string): Promise<void> {
 
 export async function clearWatchHistory(): Promise<void> {
   await api.post('/history/clear');
+}
+
+// Usage / Rate Limiting APIs
+export interface UsageStatus {
+  used: number;
+  limit: number;
+  remaining: number;
+  bonus_quota: number;  // Bonus quota from invitations
+}
+
+export interface AiChatUsageStatus {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+export interface DailyUsageStatus {
+  video_parse: UsageStatus;
+  ai_chat: AiChatUsageStatus;
+}
+
+export async function getUsageStatus(): Promise<DailyUsageStatus> {
+  const response = await api.get<ApiResponse<DailyUsageStatus>>('/usage/status');
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to get usage status');
+  }
+  return response.data.data;
+}
+
+// Invitation / Referral APIs
+export interface InviteCodeResponse {
+  invite_code: string;
+  invite_link: string;
+}
+
+export interface InviteStatsResponse {
+  invite_count: number;
+  bonus_quota: number;
+  bonus_per_invite: number;
+}
+
+export async function getInviteCode(): Promise<InviteCodeResponse> {
+  const response = await api.get<ApiResponse<InviteCodeResponse>>('/invite/code');
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to get invite code');
+  }
+  return response.data.data;
+}
+
+export async function getInviteStats(): Promise<InviteStatsResponse> {
+  const response = await api.get<ApiResponse<InviteStatsResponse>>('/invite/stats');
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to get invite stats');
+  }
+  return response.data.data;
+}
+
+// Extended parseVideo response with usage info
+export interface ParseVideoResult {
+  videoInfo: VideoInfo;
+  usage: { remaining: number };
+}
+
+export async function parseVideoWithUsage(url: string): Promise<ParseVideoResult> {
+  const response = await api.post<ApiResponse<VideoInfo & { usage: { remaining: number } }>>('/video/parse', { url }, {
+    timeout: 120000,
+  });
+  if (!response.data.success || !response.data.data) {
+    const error = response.data.error || 'Failed to parse video';
+    // Check if it's a rate limit error
+    if (error.includes('Daily limit reached')) {
+      throw new Error('RATE_LIMIT_EXCEEDED');
+    }
+    throw new Error(error);
+  }
+  const { usage, ...videoInfo } = response.data.data;
+  return { videoInfo, usage };
 }
 
 export default api;

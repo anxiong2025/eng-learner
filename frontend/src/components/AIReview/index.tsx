@@ -63,17 +63,17 @@ function generateRetryQuestion(item: RetryItem): string {
 
   switch (newType) {
     case 'meaning':
-      return `让我们再确认一下，"${word}" 是什么意思？`;
+      return `Let's confirm: what does "${word}" mean?`;
     case 'context':
       return source_sentence
-        ? `还记得这个词的用法吗？在句子 "${source_sentence}" 中，"${word}" 表达什么意思？`
-        : `"${word}" 在日常对话中通常怎么用？`;
+        ? `Do you remember how to use this word? In "${source_sentence}", what does "${word}" express?`
+        : `How is "${word}" typically used in conversation?`;
     case 'usage':
-      return `试着用 "${word}" 造一个句子吧！`;
+      return `Try making a sentence with "${word}"!`;
     case 'spelling':
-      return `我来播放发音，你来拼写这个单词（提示：中文意思是"${meaning}"）`;
+      return `Listen to the pronunciation and spell this word (hint: it means "${meaning}")`;
     default:
-      return `"${word}" 的意思是什么？`;
+      return `What does "${word}" mean?`;
   }
 }
 
@@ -136,7 +136,7 @@ export function AIReview({ vocabulary, onBack: _onBack, onComplete }: AIReviewPr
           meaning: vocab.meaning,
           source_sentence: vocab.source_sentence,
           question_type: getQuestionType(i),
-          question: `「${vocab.word}」是什么意思？`,
+          question: `What does "${vocab.word}" mean?`,
         });
       } finally {
         prefetchingRef.current.delete(vocab.id);
@@ -174,7 +174,7 @@ export function AIReview({ vocabulary, onBack: _onBack, onComplete }: AIReviewPr
         meaning: vocab.meaning,
         source_sentence: vocab.source_sentence,
         question_type: getQuestionType(vocabIndex),
-        question: `「${vocab.word}」是什么意思？`,
+        question: `What does "${vocab.word}" mean?`,
       };
     }
   }, [vocabulary]);

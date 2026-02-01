@@ -161,4 +161,9 @@ impl OptionalAuthUser {
     pub fn user_id_or_default(&self) -> &str {
         self.0.as_ref().map(|u| u.user_id.as_str()).unwrap_or("default")
     }
+
+    /// Get tier or return "free" for unauthenticated users
+    pub fn tier_or_default(&self) -> &str {
+        self.0.as_ref().map(|u| u.tier.as_str()).unwrap_or("free")
+    }
 }

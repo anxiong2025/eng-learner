@@ -82,6 +82,7 @@ interface VideoState {
   isLoading: boolean;
   isTranslating: boolean;
   error: string | null;
+  rateLimitExceeded: boolean; // True when daily limit reached
 
   // Player state
   currentTime: number;
@@ -89,6 +90,9 @@ interface VideoState {
 
   // Seek control - when this changes, player should seek
   seekToTime: number | null;
+
+  // Play control - toggle play/pause request
+  togglePlayRequest: number; // Changes to trigger toggle
 
   // Subtitles
   subtitlesEn: Subtitle[];
@@ -133,6 +137,7 @@ interface VideoState {
   setHighlights: (indices: number[]) => void;
   seekTo: (time: number) => void;
   clearSeek: () => void;
+  togglePlay: () => void;
   reset: () => void;
   getTranslation: (index: number) => string | undefined;
   isUnlocked: (index: number) => boolean;
@@ -154,6 +159,9 @@ interface VideoState {
 
   // Retry translation for specific indices
   retryTranslation: (indices: number[]) => Promise<void>;
+
+  // Clear rate limit error
+  clearRateLimitError: () => void;
 }
 
 const initialState = {
@@ -161,9 +169,11 @@ const initialState = {
   isLoading: false,
   isTranslating: false,
   error: null,
+  rateLimitExceeded: false,
   currentTime: 0,
   playerState: 'unstarted' as PlayerState,
   seekToTime: null as number | null,
+  togglePlayRequest: 0,
   subtitlesEn: [] as Subtitle[],
   subtitleMode: 'both' as SubtitleMode,
   activeSubtitleIndex: -1,
@@ -308,9 +318,13 @@ export const useVideoStore = create<VideoState>((set, get) => ({
         set({ isLoading: false });
       }
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Failed to load video';
+      const isRateLimit = errorMessage.includes('Daily limit reached') ||
+                          errorMessage.includes('limit exceeded');
       set({
         isLoading: false,
-        error: e instanceof Error ? e.message : 'Failed to load video',
+        error: errorMessage,
+        rateLimitExceeded: isRateLimit,
       });
     }
   },
@@ -398,9 +412,17 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     set({ seekToTime: null });
   },
 
+  togglePlay: () => {
+    set(state => ({ togglePlayRequest: state.togglePlayRequest + 1 }));
+  },
+
   reset: () => {
     pendingTranslation = false;
     set({ ...initialState, translations: new Map(), vocabSeenWords: new Set() });
+  },
+
+  clearRateLimitError: () => {
+    set({ rateLimitExceeded: false, error: null });
   },
 
   // Get translation for a specific index
@@ -506,6 +528,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       vocabulary: state.vocabulary.map((w, i) =>
         i === index ? { ...w, saving: true } : w
       ),
+      vocabError: null,
     }));
 
     try {
@@ -522,11 +545,14 @@ export const useVideoStore = create<VideoState>((set, get) => ({
           i === index ? { ...w, saved: true, saving: false } : w
         ),
       }));
-    } catch {
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : 'Failed to save word. Please try again.';
+      console.error('Save word error:', e);
       set(state => ({
         vocabulary: state.vocabulary.map((w, i) =>
           i === index ? { ...w, saving: false } : w
         ),
+        vocabError: errorMsg,
       }));
     }
   },
@@ -613,7 +639,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       // Update translations map
       const newTranslations = new Map(translations);
       result.translations.forEach((text, i) => {
-        if (text && !text.includes('翻译失败')) {
+        if (text && !text.includes('Translation failed')) {
           newTranslations.set(indices[i], text);
         }
       });

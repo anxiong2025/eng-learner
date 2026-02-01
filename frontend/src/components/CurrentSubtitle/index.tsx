@@ -37,7 +37,7 @@ export function CurrentSubtitle() {
   const handleNoteSubmit = (content: string, images?: string[]) => {
     if (!videoInfo) return;
     addQuickNote(videoInfo.video_id, currentTime, content, images);
-    toast('笔记已保存', 'success');
+    toast('Note saved', 'success');
   };
 
   const handleLoginRequired = () => {
@@ -90,7 +90,7 @@ export function CurrentSubtitle() {
       {/* Note input */}
       <NoteInput
         onSubmit={handleNoteSubmit}
-        placeholder="记录的灵感是..."
+        placeholder="Capture your thoughts..."
         disabled={!isAuthenticated}
         onLoginRequired={handleLoginRequired}
       />

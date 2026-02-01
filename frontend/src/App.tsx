@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { Loader2, Link2, ArrowRight, ArrowLeft, GitBranch, FileText, BookOpen, Play, Presentation, PenLine, ChevronLeft, ChevronRight, History } from 'lucide-react';
+import { Loader2, Link2, ArrowRight, ArrowLeft, GitBranch, FileText, BookOpen, Play, Presentation, PenLine, ChevronLeft, ChevronRight, History, AlertCircle, Crown, Copy, Check, Users } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +29,7 @@ import { useVideoStore } from './stores/videoStore';
 import { useAuthStore } from './store/authStore';
 import { useWatchHistoryStore } from './store/watchHistoryStore';
 import { DEMO_VIDEO_ID } from './data/demoVideo';
+import { getInviteCode } from './api/client';
 
 // Extract video ID from YouTube URL
 function extractVideoId(url: string): string | null {
@@ -85,6 +86,81 @@ const recommendedVideos = {
     { id: 'LIBWBR3xAYQ', title: 'Investment Philosophy', thumbnail: 'https://i.ytimg.com/vi/LIBWBR3xAYQ/mqdefault.jpg' },
   ],
 };
+
+
+// Feature Showcase Component - Video Demo
+function FeatureShowcase() {
+  const DEMO_VIDEO_YOUTUBE_ID = '45WgxMtPf3U';
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const features = [
+    { icon: FileText, label: 'Bilingual Subtitles', desc: 'Real-time sync' },
+    { icon: GitBranch, label: 'AI Mind Map', desc: 'Auto-generated' },
+    { icon: Presentation, label: 'AI Slides', desc: 'One-click PPT' },
+    { icon: BookOpen, label: 'Smart Vocab', desc: 'Spaced repetition' },
+  ];
+
+  return (
+    <div className="w-full pt-12 pb-40 bg-muted/30">
+      <div className="max-w-[800px] mx-auto px-6">
+        {/* Title */}
+        <div className="text-center mb-8">
+          <h2 className="text-xl font-semibold text-foreground mb-2">See it in Action</h2>
+          <p className="text-sm text-muted-foreground">Watch how it transforms your learning experience</p>
+        </div>
+
+        {/* YouTube Video - Click to play inline */}
+        <div className="relative aspect-video rounded-xl overflow-hidden shadow-lg">
+          {!isPlaying ? (
+            <button
+              onClick={() => setIsPlaying(true)}
+              className="w-full h-full relative group cursor-pointer"
+            >
+              <img
+                src={`https://img.youtube.com/vi/${DEMO_VIDEO_YOUTUBE_ID}/maxresdefault.jpg`}
+                alt="Menmo Demo"
+                className="w-full h-full object-cover scale-[1.05]"
+              />
+              {/* Top gradient fade - hides black bars */}
+              <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-muted/80 to-transparent pointer-events-none" />
+              {/* Bottom gradient fade - hides black bars */}
+              <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-muted/80 to-transparent pointer-events-none" />
+              {/* Play button overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <svg className="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+          ) : (
+            <iframe
+              className="w-full h-full"
+              src={`https://www.youtube.com/embed/${DEMO_VIDEO_YOUTUBE_ID}?autoplay=1&rel=0&modestbranding=1`}
+              title="Menmo Demo"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          )}
+        </div>
+
+        {/* Features */}
+        <div className="grid grid-cols-4 gap-4 mt-8">
+          {features.map((feature, index) => (
+            <div key={index} className="flex flex-col items-center text-center">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <feature.icon className="w-5 h-5 text-primary" />
+              </div>
+              <span className="text-sm font-medium text-foreground">{feature.label}</span>
+              <span className="text-xs text-muted-foreground">{feature.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Home Page Component
 function HomePage() {
@@ -176,7 +252,8 @@ function HomePage() {
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-48px)] flex flex-col items-center justify-center pb-16">
+    <div className="w-full flex flex-col">
+      <div className="min-h-[calc(100vh-48px)] flex flex-col items-center justify-center pb-16">
       <div className="w-full max-w-[900px] mx-auto px-6">
       {/* Hero */}
       <div className="text-center mb-6">
@@ -197,7 +274,7 @@ function HomePage() {
               type="text"
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}
-              placeholder="Paste YouTube URL link here..."
+              placeholder="Paste a YouTube link to start learning"
               className="flex-1 bg-transparent border-0 outline-none text-base placeholder:text-[#9aa0a6] dark:placeholder:text-zinc-500"
               disabled={isLoading}
             />
@@ -385,6 +462,10 @@ function HomePage() {
         </AlertDialogContent>
       </AlertDialog>
       </div>
+      </div>
+
+      {/* Feature Showcase Section */}
+      <FeatureShowcase />
     </div>
   );
 }
@@ -393,9 +474,12 @@ function HomePage() {
 function WatchPage() {
   const { videoId } = useParams<{ videoId: string }>();
   const navigate = useNavigate();
-  const { loadVideo, loadDemoVideo, videoInfo, isLoading, error, reset } = useVideoStore();
+  const { loadVideo, loadDemoVideo, videoInfo, isLoading, error, reset, rateLimitExceeded, clearRateLimitError } = useVideoStore();
   const { addToHistory } = useWatchHistoryStore();
+  const { isAuthenticated } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'mindmap' | 'slides' | 'transcript' | 'vocabulary' | 'notes'>('transcript');
+  const [inviteLink, setInviteLink] = useState<string>('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     // If videoId changes or doesn't match current video, load the new one
@@ -425,6 +509,17 @@ function WatchPage() {
     }
   }, [videoInfo, videoId, addToHistory]);
 
+  // Fetch invite link when rate limit is exceeded
+  useEffect(() => {
+    if (rateLimitExceeded && isAuthenticated) {
+      getInviteCode().then(data => {
+        setInviteLink(data.invite_link);
+      }).catch(() => {
+        // Silently fail - user might not be logged in
+      });
+    }
+  }, [rateLimitExceeded, isAuthenticated]);
+
   // Reset and go home
   const handleGoHome = () => {
     reset();
@@ -433,6 +528,101 @@ function WatchPage() {
 
   if (isLoading) {
     return <VideoPageSkeleton />;
+  }
+
+  // Handle copy invite link
+  const handleCopyInvite = async () => {
+    if (inviteLink) {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Show rate limit dialog
+  if (rateLimitExceeded) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AlertDialog open={true} onOpenChange={() => {}}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <AlertDialogTitle className="text-xl">Daily Free Limit Reached</AlertDialogTitle>
+              </div>
+              <AlertDialogDescription className="text-base">
+                Free users can parse 3 videos per day. You can continue learning from your watch history, or invite friends for more.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col gap-3 mt-4">
+              {/* Invite friend section */}
+              {isAuthenticated && inviteLink && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-700 dark:text-green-300">Invite friends, +3 each</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={inviteLink}
+                      readOnly
+                      className="flex-1 px-3 py-2 text-xs bg-white dark:bg-zinc-800 border border-border rounded-md"
+                    />
+                    <button
+                      onClick={handleCopyInvite}
+                      className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-1"
+                    >
+                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      <span className="text-xs">{copied ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!isAuthenticated && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm text-blue-700 dark:text-blue-300">Sign in to invite friends for more</span>
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  clearRateLimitError();
+                  navigate('/');
+                }}
+                className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                <History className="w-4 h-4" />
+                View History
+              </button>
+              <button
+                onClick={() => {
+                  clearRateLimitError();
+                  navigate('/');
+                }}
+                className="flex items-center justify-center gap-2 w-full py-2 px-4 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Back to Home
+              </button>
+              {/* Pro upgrade button - reserved for future */}
+              <div className="pt-3 border-t border-border/50">
+                <button
+                  disabled
+                  className="flex items-center justify-center gap-2 w-full py-2 px-4 text-xs text-muted-foreground/60 cursor-not-allowed"
+                >
+                  <Crown className="w-4 h-4" />
+                  Upgrade to Pro - Unlimited (Coming Soon)
+                </button>
+              </div>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
   }
 
   if (error) {
@@ -543,7 +733,6 @@ function WatchPage() {
                 >
                   <GitBranch className="w-4 h-4" />
                   Map
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">Beta</span>
                   {activeTab === 'mindmap' && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                   )}
@@ -558,7 +747,7 @@ function WatchPage() {
                 >
                   <Presentation className="w-4 h-4" />
                   Slides
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">Beta</span>
+                  <span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary">Beta</span>
                   {activeTab === 'slides' && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                   )}
@@ -620,6 +809,20 @@ function App() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
+  // Store ref code from URL for invitation tracking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref');
+    if (refCode) {
+      localStorage.setItem('invite-ref-code', refCode);
+      // Clean up URL without losing other params
+      params.delete('ref');
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
   // Handle OAuth callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -628,6 +831,9 @@ function App() {
 
     if (authSuccess === 'true' && token) {
       login(decodeURIComponent(token));
+
+      // Clear the stored ref code after successful login
+      localStorage.removeItem('invite-ref-code');
 
       // Redirect back to the page user was on before login
       const returnUrl = localStorage.getItem('auth-return-url');

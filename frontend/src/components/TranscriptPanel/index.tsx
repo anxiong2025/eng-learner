@@ -24,7 +24,7 @@ interface MergedSubtitle {
 function isValidTranslation(text: string): boolean {
   if (!text || text.trim() === '') return false;
   // Filter out failed translations (Chinese error text)
-  if (text.includes('翻译失败')) return false;
+  if (text.includes('Translation failed')) return false;
   return true;
 }
 
@@ -98,6 +98,7 @@ export function TranscriptPanel() {
     translations,
     isTranslating,
     seekTo,
+    togglePlay,
     chapters,
     isGeneratingChapters,
     currentTime,
@@ -285,6 +286,10 @@ export function TranscriptPanel() {
                 key={index}
                 ref={isActive ? activeRef : null}
                 onClick={() => seekTo(merged.start)}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  togglePlay();
+                }}
                 className={`group py-1.5 px-3 rounded-md cursor-pointer transition-colors ${
                   isActive
                     ? 'bg-muted/60'

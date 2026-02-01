@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useVideoStore } from '@/stores/videoStore';
 import { useAuthStore } from '@/store/authStore';
-import { askAI } from '@/api/client';
+import { askAI, RateLimitError } from '@/api/client';
 import { AuthDialog } from '@/components/AuthDialog';
 
 const FREE_QUESTION_LIMIT = 5;
@@ -222,11 +222,14 @@ export function FloatingAI() {
         content: response.answer,
       };
       setMessages(prev => [...prev, aiMessage]);
-    } catch {
+    } catch (error) {
+      const isRateLimited = error instanceof RateLimitError;
       const errorMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: isRateLimited
+          ? 'Daily AI chat limit reached (20/day). Please try again tomorrow.'
+          : 'Sorry, I encountered an error. Please try again.',
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {

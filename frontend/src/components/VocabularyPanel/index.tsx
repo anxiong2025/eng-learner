@@ -195,7 +195,7 @@ export function VocabularyPanel() {
                         <button
                           onClick={() => speakWord(word.word)}
                           className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-                          title="发音"
+                          title="Pronounce"
                         >
                           <Volume2 className="w-3 h-3" />
                         </button>
@@ -228,7 +228,7 @@ export function VocabularyPanel() {
                       }`}
                       onClick={() => handleSaveWord(index)}
                       disabled={word.saved || word.saving}
-                      title={word.saved ? '已添加到单词本' : '添加到单词本'}
+                      title={word.saved ? 'Added to vocabulary' : 'Add to vocabulary'}
                     >
                       {word.saving ? (
                         <Loader2 className="w-3 h-3 animate-spin" />

@@ -41,6 +41,7 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  code?: string;
 }
 
 export type SubtitleMode = 'en' | 'zh' | 'both';
@@ -92,12 +93,11 @@ export interface VocabWord extends VocabularyItem {
 }
 
 export interface Slide {
-  slide_type: 'title' | 'content' | 'summary' | 'quote';
+  slide_type: 'title' | 'content' | 'summary';
   title: string;
   subtitle?: string;
   bullets: string[];
   notes?: string;
-  quote?: string;
 }
 
 export interface SlidesResponse {

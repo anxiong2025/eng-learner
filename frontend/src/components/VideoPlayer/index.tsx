@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { PlayCircle, Subtitles } from 'lucide-react';
+import { PlayCircle, Subtitles, Loader2, AlertTriangle } from 'lucide-react';
 import { useYouTubePlayer } from '@/hooks/useYouTubePlayer';
 import { useVideoStore } from '@/stores/videoStore';
 
 const HINT_STORAGE_KEY = 'englearner_subtitle_hint_shown';
 
 export function VideoPlayer() {
-  const { videoInfo, seekToTime, clearSeek, showSubtitle, toggleSubtitle } = useVideoStore();
+  const { videoInfo, seekToTime, clearSeek, showSubtitle, toggleSubtitle, togglePlayRequest, playerState } = useVideoStore();
   const [showHint, setShowHint] = useState(false);
+  const [lastToggleRequest, setLastToggleRequest] = useState(0);
 
   // Show hint for first-time users
   useEffect(() => {
@@ -33,7 +34,7 @@ export function VideoPlayer() {
     }
   }, [videoInfo]);
 
-  const { containerRef, seekTo } = useYouTubePlayer({
+  const { containerRef, seekTo, play, pause, isLoading: playerLoading, error: playerError } = useYouTubePlayer({
     videoId: videoInfo?.video_id || '',
   });
 
@@ -44,6 +45,18 @@ export function VideoPlayer() {
       clearSeek();
     }
   }, [seekToTime, seekTo, clearSeek]);
+
+  // Listen for toggle play requests from store
+  useEffect(() => {
+    if (togglePlayRequest > lastToggleRequest) {
+      setLastToggleRequest(togglePlayRequest);
+      if (playerState === 'playing') {
+        pause();
+      } else {
+        play();
+      }
+    }
+  }, [togglePlayRequest, lastToggleRequest, playerState, play, pause]);
 
   if (!videoInfo) {
     return (
@@ -68,6 +81,25 @@ export function VideoPlayer() {
   return (
     <div className="relative aspect-video bg-black rounded-xl overflow-hidden group">
       <div ref={containerRef} className="w-full h-full" />
+      {/* Loading overlay */}
+      {playerLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+          <div className="text-center text-white">
+            <Loader2 className="w-10 h-10 mx-auto mb-3 animate-spin opacity-60" />
+            <p className="text-sm opacity-60">Loading YouTube player...</p>
+          </div>
+        </div>
+      )}
+      {/* Error overlay */}
+      {playerError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90">
+          <div className="text-center text-white">
+            <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-amber-500" />
+            <p className="text-sm font-medium mb-1">Failed to load video</p>
+            <p className="text-xs opacity-60">{playerError}</p>
+          </div>
+        </div>
+      )}
       {/* Floating subtitle toggle button - larger on mobile for touch */}
       <button
         onClick={handleToggle}

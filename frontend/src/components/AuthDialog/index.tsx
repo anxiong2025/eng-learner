@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -16,13 +16,39 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { LogOut } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { LogOut, Check, Zap, Gift } from 'lucide-react';
 import { useAuthStore, type User } from '@/store/authStore';
+import { getUsageStatus, getInviteCode } from '@/api/client';
 
 const API_URL = 'http://localhost:3001';
 
 // Dropdown menu for logged-in user
 function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number; remaining: number } | null>(null);
+  const [inviteLink, setInviteLink] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Fetch usage and invite info on mount
+  useEffect(() => {
+    getUsageStatus().then(data => {
+      setUsageInfo(data.video_parse);
+    }).catch(() => {});
+
+    getInviteCode().then(data => {
+      setInviteLink(data.invite_link);
+    }).catch(() => {});
+  }, []);
+
+  const handleCopyInvite = async () => {
+    if (inviteLink) {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      // Reset after delay
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -33,15 +59,60 @@ function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
           ∞
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="font-normal pb-3">
           <div className="flex flex-col space-y-1">
-            {user.name && <p className="text-sm font-medium">{user.name}</p>}
+            {user.name && <p className="text-sm font-medium leading-none">{user.name}</p>}
             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onLogout} className="cursor-pointer">
+        {/* Usage info */}
+        {usageInfo && (
+          <>
+            <div className="px-2 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  Today
+                </span>
+                <span className="text-xs font-medium tabular-nums">
+                  {usageInfo.remaining}/{usageInfo.limit}
+                </span>
+              </div>
+              <Progress
+                value={(usageInfo.remaining / usageInfo.limit) * 100}
+                className="h-1.5 bg-muted/50"
+                indicatorClassName="bg-primary/60"
+              />
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {/* Invite friends - click to copy */}
+        <DropdownMenuItem
+          onSelect={(e) => e.preventDefault()}
+          onClick={handleCopyInvite}
+          className={`cursor-pointer transition-all duration-200 ${
+            copied
+              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+              : ''
+          }`}
+        >
+          {copied ? (
+            <Check className="mr-2 h-4 w-4" />
+          ) : (
+            <Gift className="mr-2 h-4 w-4 text-emerald-600" />
+          )}
+          <span className="flex-1">
+            {copied ? 'Copied!' : 'Invite Friends'}
+          </span>
+          {!copied && (
+            <span className="text-[10px] text-emerald-600 font-medium">+3</span>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onLogout} className="cursor-pointer text-muted-foreground">
           <LogOut className="mr-2 h-4 w-4" />
           Sign out
         </DropdownMenuItem>
@@ -98,7 +169,13 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
   const handleSocialLogin = (provider: 'google' | 'github') => {
     // Save current URL to redirect back after login
     localStorage.setItem('auth-return-url', window.location.href);
-    window.location.href = `${API_URL}/api/auth/${provider}`;
+
+    // Include ref_code if user came from an invite link
+    const refCode = localStorage.getItem('invite-ref-code');
+    const url = refCode
+      ? `${API_URL}/api/auth/${provider}?ref_code=${encodeURIComponent(refCode)}`
+      : `${API_URL}/api/auth/${provider}`;
+    window.location.href = url;
   };
 
   const handleLogout = () => {

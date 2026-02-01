@@ -1,10 +1,12 @@
-use axum::{routing::post, Json, Router};
+use axum::{extract::State, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 
+use crate::auth::OptionalAuthUser;
+use crate::db::{DbPool, get_cached_mindmap, save_mindmap_cache, get_cached_slides, save_slides_cache, check_can_ai_chat, increment_ai_chat_count};
 use crate::models::{ApiResponse, Subtitle};
 use crate::services::ai::{get_ai_provider, Chapter, Slide, VocabularyItem};
 
-pub fn routes() -> Router {
+pub fn routes(db_pool: DbPool) -> Router {
     Router::new()
         .route("/analyze", post(analyze_highlights))
         .route("/ask", post(ask_question))
@@ -13,6 +15,7 @@ pub fn routes() -> Router {
         .route("/mindmap", post(generate_mindmap))
         .route("/slides", post(generate_slides))
         .route("/chapters", post(generate_chapters))
+        .with_state(db_pool)
 }
 
 #[derive(Deserialize)]
@@ -50,14 +53,43 @@ pub struct AskResponse {
     answer: String,
 }
 
-async fn ask_question(Json(payload): Json<AskRequest>) -> Json<ApiResponse<AskResponse>> {
+async fn ask_question(
+    State(pool): State<DbPool>,
+    auth: OptionalAuthUser,
+    Json(payload): Json<AskRequest>,
+) -> Json<ApiResponse<AskResponse>> {
+    let user_id = auth.user_id_or_default();
+    let tier = auth.tier_or_default();
+
+    // Check rate limit
+    match check_can_ai_chat(&pool, user_id, &tier).await {
+        Ok((allowed, _remaining)) => {
+            if !allowed {
+                return Json(ApiResponse::error_with_code(
+                    "RATE_LIMIT_EXCEEDED".to_string(),
+                    "Daily AI chat limit reached. Please try again tomorrow.".to_string(),
+                ));
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to check AI chat limit: {}", e);
+            // Continue anyway if rate limit check fails
+        }
+    }
+
     let provider = match get_ai_provider() {
         Ok(p) => p,
         Err(e) => return Json(ApiResponse::error(format!("AI provider error: {}", e))),
     };
 
     match provider.ask_question(&payload.context, &payload.question).await {
-        Ok(answer) => Json(ApiResponse::success(AskResponse { answer })),
+        Ok(answer) => {
+            // Increment usage count on success
+            if let Err(e) = increment_ai_chat_count(&pool, user_id).await {
+                tracing::warn!("Failed to increment AI chat count: {}", e);
+            }
+            Json(ApiResponse::success(AskResponse { answer }))
+        }
         Err(e) => Json(ApiResponse::error(format!("Question failed: {}", e))),
     }
 }
@@ -112,50 +144,92 @@ async fn extract_vocabulary(
 
 #[derive(Deserialize)]
 pub struct MindMapRequest {
+    video_id: String,
     title: String,
     content: String,
+    #[serde(default)]
+    regenerate: bool,
 }
 
 #[derive(Serialize)]
 pub struct MindMapResponse {
     markdown: String,
+    cached: bool,
 }
 
 async fn generate_mindmap(
+    State(db_pool): State<DbPool>,
     Json(payload): Json<MindMapRequest>,
 ) -> Json<ApiResponse<MindMapResponse>> {
+    // Check cache first (skip if regenerate is requested)
+    if !payload.regenerate {
+        if let Ok(Some(cached_markdown)) = get_cached_mindmap(&db_pool, &payload.video_id).await {
+            return Json(ApiResponse::success(MindMapResponse {
+                markdown: cached_markdown,
+                cached: true,
+            }));
+        }
+    }
+
     let provider = match get_ai_provider() {
         Ok(p) => p,
         Err(e) => return Json(ApiResponse::error(format!("AI provider error: {}", e))),
     };
 
     match provider.generate_mindmap(&payload.title, &payload.content).await {
-        Ok(markdown) => Json(ApiResponse::success(MindMapResponse { markdown })),
+        Ok(markdown) => {
+            // Save to cache (ignore errors)
+            let _ = save_mindmap_cache(&db_pool, &payload.video_id, &markdown).await;
+            Json(ApiResponse::success(MindMapResponse { markdown, cached: false }))
+        }
         Err(e) => Json(ApiResponse::error(format!("Mind map generation failed: {}", e))),
     }
 }
 
 #[derive(Deserialize)]
 pub struct SlidesRequest {
+    video_id: String,
     title: String,
     content: String,
+    #[serde(default)]
+    regenerate: bool,
 }
 
 #[derive(Serialize)]
 pub struct SlidesResponse {
     slides: Vec<Slide>,
+    cached: bool,
 }
 
 async fn generate_slides(
+    State(db_pool): State<DbPool>,
     Json(payload): Json<SlidesRequest>,
 ) -> Json<ApiResponse<SlidesResponse>> {
+    // Check cache first (skip if regenerate is requested)
+    if !payload.regenerate {
+        if let Ok(Some(cached_json)) = get_cached_slides(&db_pool, &payload.video_id).await {
+            if let Ok(slides) = serde_json::from_str::<Vec<Slide>>(&cached_json) {
+                return Json(ApiResponse::success(SlidesResponse {
+                    slides,
+                    cached: true,
+                }));
+            }
+        }
+    }
+
     let provider = match get_ai_provider() {
         Ok(p) => p,
         Err(e) => return Json(ApiResponse::error(format!("AI provider error: {}", e))),
     };
 
     match provider.generate_slides(&payload.title, &payload.content).await {
-        Ok(slides) => Json(ApiResponse::success(SlidesResponse { slides })),
+        Ok(slides) => {
+            // Save to cache (ignore errors)
+            if let Ok(slides_json) = serde_json::to_string(&slides) {
+                let _ = save_slides_cache(&db_pool, &payload.video_id, &slides_json).await;
+            }
+            Json(ApiResponse::success(SlidesResponse { slides, cached: false }))
+        }
         Err(e) => Json(ApiResponse::error(format!("Slides generation failed: {}", e))),
     }
 }
