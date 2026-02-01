@@ -474,7 +474,7 @@ function HomePage() {
 function WatchPage() {
   const { videoId } = useParams<{ videoId: string }>();
   const navigate = useNavigate();
-  const { loadVideo, loadDemoVideo, videoInfo, isLoading, error, reset, rateLimitExceeded, clearRateLimitError } = useVideoStore();
+  const { loadVideo, loadDemoVideo, videoInfo, isLoading, error, reset, rateLimitExceeded, clearRateLimitError, loginRequired, clearLoginRequired } = useVideoStore();
   const { addToHistory } = useWatchHistoryStore();
   const { isAuthenticated } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'mindmap' | 'slides' | 'transcript' | 'vocabulary' | 'notes'>('transcript');
@@ -520,6 +520,15 @@ function WatchPage() {
     }
   }, [rateLimitExceeded, isAuthenticated]);
 
+  // Auto-reload video when user logs in after loginRequired
+  useEffect(() => {
+    if (isAuthenticated && loginRequired && videoId && videoId !== DEMO_VIDEO_ID) {
+      clearLoginRequired();
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      loadVideo(url, videoId);
+    }
+  }, [isAuthenticated, loginRequired, videoId]);
+
   // Reset and go home
   const handleGoHome = () => {
     reset();
@@ -528,6 +537,53 @@ function WatchPage() {
 
   if (isLoading) {
     return <VideoPageSkeleton />;
+  }
+
+  // Show login required dialog
+  if (loginRequired) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AlertDialog open={true} onOpenChange={() => {}}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <AlertDialogTitle className="text-xl">Sign In Required</AlertDialogTitle>
+              </div>
+              <AlertDialogDescription className="text-base">
+                Please sign in to watch this video. You can try our demo video without signing in.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col gap-3 mt-4">
+              <AuthDialog open={true} onOpenChange={() => {}} showTrigger={false} />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    clearLoginRequired();
+                    navigate(`/watch/${DEMO_VIDEO_ID}`);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-border rounded-lg hover:bg-muted transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                  Try Demo
+                </button>
+                <button
+                  onClick={() => {
+                    clearLoginRequired();
+                    navigate('/');
+                  }}
+                  className="flex-1 py-2 px-4 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Back to Home
+                </button>
+              </div>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
   }
 
   // Handle copy invite link

@@ -59,9 +59,20 @@ async fn parse_video(
         None => return Json(ApiResponse::error("Could not extract video ID")),
     };
 
-    // Demo video ID - skip rate limiting and counting for demo
+    // Demo video ID - free for everyone
     const DEMO_VIDEO_ID: &str = "zxMjOqM7DFs";
     let is_demo = video_id == DEMO_VIDEO_ID;
+
+    // Check if user is logged in (not using default)
+    let is_logged_in = user_id != "default";
+
+    // Non-demo videos require login
+    if !is_demo && !is_logged_in {
+        return Json(ApiResponse::error_with_code(
+            "LOGIN_REQUIRED".to_string(),
+            "Please sign in to watch this video.".to_string(),
+        ));
+    }
 
     // Check rate limit (skip for demo video)
     let remaining = if is_demo {

@@ -83,6 +83,7 @@ interface VideoState {
   isTranslating: boolean;
   error: string | null;
   rateLimitExceeded: boolean; // True when daily limit reached
+  loginRequired: boolean; // True when login is required to watch
 
   // Player state
   currentTime: number;
@@ -162,6 +163,8 @@ interface VideoState {
 
   // Clear rate limit error
   clearRateLimitError: () => void;
+  // Clear login required error
+  clearLoginRequired: () => void;
 }
 
 const initialState = {
@@ -170,6 +173,7 @@ const initialState = {
   isTranslating: false,
   error: null,
   rateLimitExceeded: false,
+  loginRequired: false,
   currentTime: 0,
   playerState: 'unstarted' as PlayerState,
   seekToTime: null as number | null,
@@ -321,10 +325,13 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       const errorMessage = e instanceof Error ? e.message : 'Failed to load video';
       const isRateLimit = errorMessage.includes('Daily limit reached') ||
                           errorMessage.includes('limit exceeded');
+      const isLoginRequired = errorMessage.includes('Please sign in') ||
+                              errorMessage.includes('LOGIN_REQUIRED');
       set({
         isLoading: false,
         error: errorMessage,
         rateLimitExceeded: isRateLimit,
+        loginRequired: isLoginRequired,
       });
     }
   },
@@ -423,6 +430,10 @@ export const useVideoStore = create<VideoState>((set, get) => ({
 
   clearRateLimitError: () => {
     set({ rateLimitExceeded: false, error: null });
+  },
+
+  clearLoginRequired: () => {
+    set({ loginRequired: false, error: null });
   },
 
   // Get translation for a specific index
