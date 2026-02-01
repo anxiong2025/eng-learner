@@ -115,9 +115,12 @@ export function useYouTubePlayer({ videoId, onReady }: UseYouTubePlayerOptions) 
     }
   }, []);
 
-  const seekTo = useCallback((seconds: number) => {
+  const seekTo = useCallback((seconds: number, autoPlay: boolean = true) => {
     if (playerRef.current) {
       playerRef.current.seekTo(seconds, true);
+      if (autoPlay) {
+        playerRef.current.playVideo();
+      }
     }
   }, []);
 

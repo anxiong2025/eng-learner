@@ -1,13 +1,37 @@
 import axios from 'axios';
-import type { ApiResponse, VideoInfo, SubtitleResponse, Subtitle, AnalyzeResponse, AskResponse, TranslateResponse, VocabularyResponse } from '../types';
+import type { ApiResponse, VideoInfo, SubtitleResponse, Subtitle, AnalyzeResponse, AskResponse, TranslateResponse, VocabularyResponse, SlidesResponse, ChaptersResponse } from '../types';
+import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
 });
 
+// Add auth token to requests
+api.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid - logout user
+      useAuthStore.getState().logout();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export async function parseVideo(url: string): Promise<VideoInfo> {
-  const response = await api.post<ApiResponse<VideoInfo>>('/video/parse', { url });
+  const response = await api.post<ApiResponse<VideoInfo>>('/video/parse', { url }, {
+    timeout: 120000, // 2 minutes for video parsing (YouTube API can be slow)
+  });
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.error || 'Failed to parse video');
   }
@@ -17,7 +41,7 @@ export async function parseVideo(url: string): Promise<VideoInfo> {
 export async function getSubtitles(videoId: string, lang: string = 'en'): Promise<SubtitleResponse> {
   const response = await api.get<ApiResponse<SubtitleResponse>>(`/video/${videoId}/subtitles`, {
     params: { lang },
-    timeout: lang === 'zh' ? 120000 : 30000, // 2 minutes for Chinese (translation needed)
+    timeout: 90000, // 1.5 minutes for subtitle fetching
   });
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.error || 'Failed to fetch subtitles');
@@ -61,6 +85,51 @@ export async function extractVocabulary(text: string): Promise<VocabularyRespons
   return response.data.data;
 }
 
+// Mind Map generation
+export interface MindMapResponse {
+  markdown: string;
+}
+
+export async function generateMindMap(title: string, content: string): Promise<MindMapResponse> {
+  const response = await api.post<ApiResponse<MindMapResponse>>('/ai/mindmap', {
+    title,
+    content,
+  }, {
+    timeout: 120000, // 2 minutes for complex analysis
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to generate mind map');
+  }
+  return response.data.data;
+}
+
+// Slides generation
+export async function generateSlides(title: string, content: string): Promise<SlidesResponse> {
+  const response = await api.post<ApiResponse<SlidesResponse>>('/ai/slides', {
+    title,
+    content,
+  }, {
+    timeout: 180000, // 3 minutes for slide generation
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to generate slides');
+  }
+  return response.data.data;
+}
+
+// Chapters/TOC generation
+export async function generateChapters(subtitles: Subtitle[]): Promise<ChaptersResponse> {
+  const response = await api.post<ApiResponse<ChaptersResponse>>('/ai/chapters', {
+    subtitles,
+  }, {
+    timeout: 60000, // 1 minute for chapter generation
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to generate chapters');
+  }
+  return response.data.data;
+}
+
 // Vocabulary persistence APIs
 export interface SaveVocabularyRequest {
   word: string;
@@ -79,11 +148,16 @@ export interface SavedVocabulary {
   example?: string;
   ease_factor: number;
   interval_days: number;
+  interval_minutes: number;  // Ebbinghaus-based interval in minutes
   due_date?: string;
+  due_at?: string;           // Precise datetime (ISO 8601)
   review_count: number;
+  learning_step: number;     // 0-3: learning phase, 4+: review phase
   source_video_id?: string;
   source_sentence?: string;
   created_at: string;
+  last_reviewed_at?: string;
+  memory_strength: number;   // 0.0-1.0, based on forgetting curve
 }
 
 export async function saveVocabulary(data: SaveVocabularyRequest): Promise<{ id: number }> {
@@ -127,6 +201,77 @@ export async function checkVocabularySaved(word: string): Promise<boolean> {
     return false;
   }
   return response.data.data.saved;
+}
+
+// AI Review APIs
+export interface ReviewQuestion {
+  vocab_id: number;
+  word: string;
+  meaning: string;
+  source_sentence?: string;
+  question_type: 'context' | 'meaning' | 'usage' | 'spelling';
+  question: string;
+}
+
+export interface ReviewEvaluation {
+  is_correct: boolean;
+  feedback: string;
+  follow_up?: string;
+  quality: number; // 0-3
+}
+
+export interface StartAIReviewResponse {
+  session_id: string;
+  questions: ReviewQuestion[];
+}
+
+export async function startAIReview(vocabIds: number[]): Promise<StartAIReviewResponse> {
+  const response = await api.post<ApiResponse<StartAIReviewResponse>>('/vocabulary/ai-review', {
+    vocab_ids: vocabIds,
+  }, {
+    timeout: 60000, // 1 minute for AI generation
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to start AI review');
+  }
+  return response.data.data;
+}
+
+// Generate a single review question (for progressive loading)
+export interface GenerateQuestionRequest {
+  vocab_id: number;
+  word: string;
+  meaning: string;
+  source_sentence?: string;
+  question_type?: 'meaning' | 'usage' | 'context' | 'spelling';
+}
+
+export async function generateReviewQuestion(request: GenerateQuestionRequest): Promise<ReviewQuestion> {
+  const response = await api.post<ApiResponse<{ question: ReviewQuestion }>>('/vocabulary/ai-review/question', request, {
+    timeout: 15000, // 15 seconds for single question
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to generate question');
+  }
+  return response.data.data.question;
+}
+
+export interface SubmitAnswerRequest {
+  vocab_id: number;
+  word: string;
+  meaning: string;
+  question: string;
+  user_answer: string;
+}
+
+export async function submitAIReviewAnswer(request: SubmitAnswerRequest): Promise<ReviewEvaluation> {
+  const response = await api.post<ApiResponse<{ evaluation: ReviewEvaluation }>>('/vocabulary/ai-review/answer', request, {
+    timeout: 30000, // 30 seconds for AI evaluation
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to submit answer');
+  }
+  return response.data.data.evaluation;
 }
 
 // Learning Statistics APIs
@@ -186,6 +331,116 @@ export async function getLearningOverview(): Promise<LearningOverview> {
     throw new Error(response.data.error || 'Failed to get learning overview');
   }
   return response.data.data;
+}
+
+// Memory distribution for dashboard
+export interface MemoryDistribution {
+  strong: number;    // >= 70%
+  good: number;      // 40-69%
+  weak: number;      // 20-39%
+  critical: number;  // < 20%
+  total: number;
+}
+
+export async function getMemoryDistribution(): Promise<MemoryDistribution> {
+  const response = await api.get<ApiResponse<MemoryDistribution>>('/stats/memory-distribution');
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to get memory distribution');
+  }
+  return response.data.data;
+}
+
+// AI Memory Card APIs
+export interface GenerateMemoryCardRequest {
+  word: string;
+  meaning: string;
+  source_sentence?: string;
+}
+
+export interface AIMemoryCard {
+  word: string;
+  phonetic?: string;
+  part_of_speech?: string;
+  meaning: string;
+  etymology?: string;
+  mnemonic?: string;
+  memory_story?: string;
+  example_sentence?: string;
+  visual_hint?: string;
+}
+
+export async function generateMemoryCard(request: GenerateMemoryCardRequest): Promise<AIMemoryCard> {
+  const response = await api.post<ApiResponse<{ card: AIMemoryCard }>>('/vocabulary/memory-card', request, {
+    timeout: 30000, // 30 seconds for AI generation
+  });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to generate memory card');
+  }
+  return response.data.data.card;
+}
+
+// Notes APIs
+export interface NoteData {
+  id?: string;
+  video_id: string;
+  timestamp: number;
+  english?: string;
+  chinese?: string;
+  note_text?: string;
+}
+
+export interface NoteResponse {
+  id: string;
+  video_id: string;
+  timestamp: number;
+  english?: string;
+  chinese?: string;
+  note_text?: string;
+  created_at: string;
+}
+
+export async function getNotes(videoId?: string): Promise<NoteResponse[]> {
+  const params = videoId ? { video_id: videoId } : {};
+  const response = await api.get<NoteResponse[]>('/notes', { params });
+  return response.data;
+}
+
+export async function saveNote(note: NoteData): Promise<NoteResponse> {
+  const response = await api.post<NoteResponse>('/notes', note);
+  return response.data;
+}
+
+export async function deleteNote(noteId: string): Promise<void> {
+  await api.delete(`/notes/${noteId}`);
+}
+
+// Watch History APIs
+export interface WatchHistoryItem {
+  video_id: string;
+  title: string;
+  thumbnail: string;
+  watched_at: string;
+}
+
+export async function getWatchHistory(): Promise<WatchHistoryItem[]> {
+  const response = await api.get<{ history: WatchHistoryItem[] }>('/history');
+  return response.data.history;
+}
+
+export async function addWatchHistory(item: { video_id: string; title: string; thumbnail: string }): Promise<void> {
+  await api.post('/history', {
+    video_id: item.video_id,
+    title: item.title,
+    thumbnail: item.thumbnail,
+  });
+}
+
+export async function deleteWatchHistoryItem(videoId: string): Promise<void> {
+  await api.post('/history/delete', { video_id: videoId });
+}
+
+export async function clearWatchHistory(): Promise<void> {
+  await api.post('/history/clear');
 }
 
 export default api;

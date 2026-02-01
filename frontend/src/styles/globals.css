@@ -94,6 +94,143 @@
 .highlight-wavy {
   text-decoration: underline;
   text-decoration-style: wavy;
-  text-decoration-color: hsl(45 93% 47%);
+  text-decoration-color: hsl(45 93% 47% / 0.6);
   text-underline-offset: 4px;
+  background: linear-gradient(
+    to right,
+    hsl(45 93% 47% / 0.08),
+    hsl(45 93% 47% / 0.05)
+  );
+  border-radius: 2px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  transition: all 0.3s ease;
+}
+
+/* Active highlight - prominent glow that fades slowly */
+.highlight-wavy.highlight-active {
+  animation: highlight-fade 5s ease-out forwards;
+}
+
+/* Input gradient border animation */
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+    opacity: 1;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 1;
+  }
+  80% {
+    background-position: 200% 50%;
+    opacity: 0.6;
+  }
+  100% {
+    background-position: 300% 50%;
+    opacity: 0;
+  }
+}
+
+.animate-gradient-fade {
+  background-size: 300% 300%;
+  animation: gradient-flow 3s ease-in-out forwards;
+}
+
+@keyframes highlight-fade {
+  0% {
+    background: linear-gradient(
+      to right,
+      hsl(45 93% 60% / 0.4),
+      hsl(45 93% 50% / 0.3)
+    );
+    text-decoration-color: hsl(45 100% 55%);
+    box-shadow: 0 0 12px hsl(45 93% 50% / 0.4), inset 0 0 8px hsl(45 93% 50% / 0.1);
+  }
+  20% {
+    background: linear-gradient(
+      to right,
+      hsl(45 93% 55% / 0.3),
+      hsl(45 93% 50% / 0.22)
+    );
+    text-decoration-color: hsl(45 93% 52%);
+    box-shadow: 0 0 8px hsl(45 93% 50% / 0.3);
+  }
+  50% {
+    background: linear-gradient(
+      to right,
+      hsl(45 93% 50% / 0.2),
+      hsl(45 93% 47% / 0.15)
+    );
+    text-decoration-color: hsl(45 93% 50%);
+    box-shadow: 0 0 4px hsl(45 93% 50% / 0.2);
+  }
+  100% {
+    background: linear-gradient(
+      to right,
+      hsl(45 93% 47% / 0.08),
+      hsl(45 93% 47% / 0.05)
+    );
+    text-decoration-color: hsl(45 93% 47% / 0.6);
+    box-shadow: none;
+  }
+}
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Input border gradient animation - runs once on load */
+@keyframes border-rotate {
+  0% {
+    --border-angle: 0deg;
+  }
+  100% {
+    --border-angle: 360deg;
+  }
+}
+
+@keyframes border-fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.input-glow-border {
+  position: relative;
+}
+
+.input-glow-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 22px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 0%,
+    transparent 70%,
+    rgba(147, 197, 253, 0.5) 80%,
+    rgba(196, 181, 253, 0.5) 90%,
+    transparent 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: border-rotate 1.5s linear forwards, border-fade-out 0.5s ease-out 1.5s forwards;
+  pointer-events: none;
 }

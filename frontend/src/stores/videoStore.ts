@@ -1,11 +1,80 @@
 import { create } from 'zustand';
-import type { VideoInfo, Subtitle, SubtitleMode, PlayerState } from '../types';
-import { parseVideo, getSubtitles, analyzeHighlights, translateSubtitles } from '../api/client';
+import type { VideoInfo, Subtitle, SubtitleMode, PlayerState, VocabWord, VocabularyItem, Slide, Chapter } from '../types';
+import { parseVideo, getSubtitles, analyzeHighlights, translateSubtitles, extractVocabulary, saveVocabulary, checkVocabularySaved, generateChapters } from '../api/client';
+import { DEMO_VIDEO_INFO, DEMO_SUBTITLES } from '../data/demoVideo';
+
+// ============ Cache Utilities ============
+const CACHE_PREFIX = 'eng_learner_';
+const CACHE_EXPIRY_HOURS = 24 * 7; // 7 days
+
+interface VideoCache {
+  videoInfo: VideoInfo;
+  subtitlesEn: Subtitle[];
+  translations: Record<number, string>;
+  chapters: Chapter[];
+  timestamp: number;
+}
+
+function getCacheKey(videoId: string): string {
+  return `${CACHE_PREFIX}video_${videoId}`;
+}
+
+function getVideoCache(videoId: string): VideoCache | null {
+  try {
+    const cached = localStorage.getItem(getCacheKey(videoId));
+    if (!cached) return null;
+
+    const data: VideoCache = JSON.parse(cached);
+    const now = Date.now();
+    const expiryMs = CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+
+    if (now - data.timestamp > expiryMs) {
+      localStorage.removeItem(getCacheKey(videoId));
+      return null;
+    }
+
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setVideoCache(videoId: string, data: Omit<VideoCache, 'timestamp'>): void {
+  try {
+    const cache: VideoCache = {
+      ...data,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(getCacheKey(videoId), JSON.stringify(cache));
+  } catch (e) {
+    console.warn('Failed to cache video data:', e);
+  }
+}
+
+// Clear all video caches
+export function clearAllVideoCache(): void {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(CACHE_PREFIX)) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  console.log('Cleared', keysToRemove.length, 'video caches');
+}
+
+// Expose to window for easy debugging
+if (typeof window !== 'undefined') {
+  (window as any).clearVideoCache = clearAllVideoCache;
+}
 
 // Translation batch size - translate this many subtitles at a time
 const TRANSLATION_BATCH_SIZE = 15;
 // Look-ahead - start translating when we're this close to untranslated content
 const TRANSLATION_LOOK_AHEAD = 5;
+// Vocabulary batch size - process this many subtitles per batch
+const VOCAB_BATCH_SIZE = 30;
 
 interface VideoState {
   // Video info
@@ -34,8 +103,30 @@ interface VideoState {
   // AI highlights
   highlightedIndices: number[];
 
+  // Vocabulary
+  vocabulary: VocabWord[];
+  isExtractingVocab: boolean;
+  vocabProgress: { current: number; total: number };
+  vocabError: string | null;
+  vocabSeenWords: Set<string>;
+
+  // Mind Map
+  mindMapContent: string | null;
+
+  // Slides
+  slidesContent: Slide[] | null;
+  isGeneratingSlides: boolean;
+
+  // Subtitle visibility
+  showSubtitle: boolean;
+
+  // Chapters / Table of Contents
+  chapters: Chapter[];
+  isGeneratingChapters: boolean;
+
   // Actions
-  loadVideo: (url: string) => Promise<void>;
+  loadVideo: (url: string, cachedVideoId?: string) => Promise<void>;
+  loadDemoVideo: () => void;
   setCurrentTime: (time: number) => void;
   setPlayerState: (state: PlayerState) => void;
   setSubtitleMode: (mode: SubtitleMode) => void;
@@ -45,6 +136,24 @@ interface VideoState {
   reset: () => void;
   getTranslation: (index: number) => string | undefined;
   isUnlocked: (index: number) => boolean;
+
+  // Vocabulary actions
+  extractVocabulary: () => Promise<void>;
+  saveWord: (index: number) => Promise<void>;
+  saveAllWords: () => Promise<void>;
+
+  // Mind Map actions
+  setMindMapContent: (content: string | null) => void;
+
+  // Slides actions
+  setSlidesContent: (slides: Slide[] | null) => void;
+  setIsGeneratingSlides: (isGenerating: boolean) => void;
+
+  // Subtitle visibility actions
+  toggleSubtitle: () => void;
+
+  // Retry translation for specific indices
+  retryTranslation: (indices: number[]) => Promise<void>;
 }
 
 const initialState = {
@@ -62,6 +171,22 @@ const initialState = {
   translatedUpTo: -1,
   maxPlayedIndex: -1,
   highlightedIndices: [] as number[],
+  // Vocabulary
+  vocabulary: [] as VocabWord[],
+  isExtractingVocab: false,
+  vocabProgress: { current: 0, total: 0 },
+  vocabError: null as string | null,
+  vocabSeenWords: new Set<string>(),
+  // Mind Map
+  mindMapContent: null as string | null,
+  // Slides
+  slidesContent: null as Slide[] | null,
+  isGeneratingSlides: false,
+  // Subtitle visibility
+  showSubtitle: false,
+  // Chapters
+  chapters: [] as Chapter[],
+  isGeneratingChapters: false,
 };
 
 // Track pending translation to avoid duplicate requests
@@ -70,7 +195,7 @@ let pendingTranslation = false;
 export const useVideoStore = create<VideoState>((set, get) => ({
   ...initialState,
 
-  loadVideo: async (url: string) => {
+  loadVideo: async (url: string, cachedVideoId?: string) => {
     set({
       isLoading: true,
       error: null,
@@ -81,34 +206,66 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     pendingTranslation = false;
 
     try {
-      // Parse video info
+      // If we have a cached video ID, check cache first before making any API calls
+      if (cachedVideoId) {
+        const cached = getVideoCache(cachedVideoId);
+        if (cached && cached.subtitlesEn.length > 0) {
+          console.log('Loading from cache (fast path):', cachedVideoId);
+          const translationMap = new Map<number, string>(
+            Object.entries(cached.translations).map(([k, v]) => [parseInt(k), v])
+          );
+          set({
+            videoInfo: cached.videoInfo,
+            subtitlesEn: cached.subtitlesEn,
+            translations: translationMap,
+            translatedUpTo: translationMap.size > 0 ? Math.max(...translationMap.keys()) : -1,
+            maxPlayedIndex: translationMap.size > 0 ? Math.max(...translationMap.keys()) : -1,
+            chapters: cached.chapters || [],
+            isLoading: false,
+          });
+
+          // Still extract vocabulary in background if needed
+          setTimeout(() => {
+            useVideoStore.getState().extractVocabulary();
+          }, 100);
+          return;
+        }
+      }
+
+      // Parse video info first to get video ID
       const videoInfo = await parseVideo(url);
       set({ videoInfo });
 
-      // Fetch English subtitles
+      // Check cache (fallback path)
+      const cached = getVideoCache(videoInfo.video_id);
+      if (cached && cached.subtitlesEn.length > 0) {
+        console.log('Loading from cache:', videoInfo.video_id);
+        const translationMap = new Map<number, string>(
+          Object.entries(cached.translations).map(([k, v]) => [parseInt(k), v])
+        );
+        set({
+          subtitlesEn: cached.subtitlesEn,
+          translations: translationMap,
+          translatedUpTo: translationMap.size > 0 ? Math.max(...translationMap.keys()) : -1,
+          maxPlayedIndex: translationMap.size > 0 ? Math.max(...translationMap.keys()) : -1,
+          chapters: cached.chapters || [],
+          isLoading: false,
+        });
+
+        // Still extract vocabulary in background if needed
+        setTimeout(() => {
+          useVideoStore.getState().extractVocabulary();
+        }, 100);
+        return;
+      }
+
+      // Fetch English subtitles only (Chinese translation via AI)
       try {
         const enSubs = await getSubtitles(videoInfo.video_id, 'en');
         set({ subtitlesEn: enSubs.subtitles, isLoading: false });
 
-        // First, try to get existing Chinese subtitles from YouTube
-        try {
-          const zhSubs = await getSubtitles(videoInfo.video_id, 'zh');
-          // YouTube has Chinese subtitles - load them all
-          const translationMap = new Map<number, string>();
-          zhSubs.subtitles.forEach((sub, index) => {
-            translationMap.set(index, sub.text);
-          });
-          set({
-            translations: translationMap,
-            translatedUpTo: zhSubs.subtitles.length - 1,
-            maxPlayedIndex: zhSubs.subtitles.length - 1, // Unlock all if YouTube has Chinese
-          });
-        } catch {
-          // No Chinese subtitles from YouTube - use on-demand AI translation
-          console.log('No Chinese subtitles from YouTube, will use on-demand AI translation');
-          // Translate first batch immediately
-          requestTranslationBatch(0);
-        }
+        // Start AI translation in background
+        requestTranslationBatch(0);
 
         // Analyze highlights with AI (non-blocking)
         analyzeHighlights(enSubs.subtitles)
@@ -118,6 +275,34 @@ export const useVideoStore = create<VideoState>((set, get) => ({
           .catch((e) => {
             console.warn('Failed to analyze highlights:', e);
           });
+
+        // Generate chapters/TOC (non-blocking)
+        set({ isGeneratingChapters: true });
+        generateChapters(enSubs.subtitles)
+          .then((result) => {
+            set({ chapters: result.chapters, isGeneratingChapters: false });
+            // Update cache with chapters
+            const state = useVideoStore.getState();
+            if (state.videoInfo) {
+              const transObj: Record<number, string> = {};
+              state.translations.forEach((v, k) => { transObj[k] = v; });
+              setVideoCache(state.videoInfo.video_id, {
+                videoInfo: state.videoInfo,
+                subtitlesEn: state.subtitlesEn,
+                translations: transObj,
+                chapters: result.chapters,
+              });
+            }
+          })
+          .catch((e) => {
+            console.warn('Failed to generate chapters:', e);
+            set({ isGeneratingChapters: false });
+          });
+
+        // Extract vocabulary in background (non-blocking)
+        setTimeout(() => {
+          useVideoStore.getState().extractVocabulary();
+        }, 100);
       } catch (e) {
         console.warn('Failed to fetch English subtitles:', e);
         set({ isLoading: false });
@@ -128,6 +313,48 @@ export const useVideoStore = create<VideoState>((set, get) => ({
         error: e instanceof Error ? e.message : 'Failed to load video',
       });
     }
+  },
+
+  // Load demo video with pre-loaded data (no network request)
+  loadDemoVideo: () => {
+    set({
+      videoInfo: DEMO_VIDEO_INFO,
+      subtitlesEn: DEMO_SUBTITLES,
+      isLoading: false,
+      error: null,
+      translations: new Map(),
+      translatedUpTo: -1,
+      maxPlayedIndex: -1,
+    });
+    pendingTranslation = false;
+
+    // Start translating first batch
+    requestTranslationBatch(0);
+
+    // Analyze highlights (non-blocking)
+    analyzeHighlights(DEMO_SUBTITLES)
+      .then((result) => {
+        useVideoStore.setState({ highlightedIndices: result.highlights });
+      })
+      .catch((e) => {
+        console.warn('Failed to analyze highlights:', e);
+      });
+
+    // Generate chapters/TOC (non-blocking)
+    useVideoStore.setState({ isGeneratingChapters: true });
+    generateChapters(DEMO_SUBTITLES)
+      .then((result) => {
+        useVideoStore.setState({ chapters: result.chapters, isGeneratingChapters: false });
+      })
+      .catch((e) => {
+        console.warn('Failed to generate chapters:', e);
+        useVideoStore.setState({ isGeneratingChapters: false });
+      });
+
+    // Extract vocabulary in background (non-blocking)
+    setTimeout(() => {
+      useVideoStore.getState().extractVocabulary();
+    }, 100);
   },
 
   setCurrentTime: (time: number) => {
@@ -173,7 +400,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
 
   reset: () => {
     pendingTranslation = false;
-    set({ ...initialState, translations: new Map() });
+    set({ ...initialState, translations: new Map(), vocabSeenWords: new Set() });
   },
 
   // Get translation for a specific index
@@ -184,6 +411,228 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   // Check if a subtitle is unlocked (has been played through)
   isUnlocked: (index: number) => {
     return index <= get().maxPlayedIndex;
+  },
+
+  // Extract vocabulary from all subtitles
+  extractVocabulary: async () => {
+    const { subtitlesEn, videoInfo, vocabulary } = get();
+    if (!videoInfo || subtitlesEn.length === 0) return;
+
+    // If already extracted, don't re-extract
+    if (vocabulary.length > 0) return;
+
+    set({ isExtractingVocab: true, vocabError: null });
+
+    // Split into batches
+    const batches: string[][] = [];
+    for (let i = 0; i < subtitlesEn.length; i += VOCAB_BATCH_SIZE) {
+      const batch = subtitlesEn.slice(i, i + VOCAB_BATCH_SIZE).map(s => s.text);
+      batches.push(batch);
+    }
+
+    set({ vocabProgress: { current: 0, total: batches.length } });
+
+    const addNewWords = async (newWords: VocabularyItem[]) => {
+      const currentSeenWords = get().vocabSeenWords;
+      // Filter out duplicates
+      const uniqueNew = newWords.filter(item => {
+        const lower = item.word.toLowerCase();
+        if (currentSeenWords.has(lower)) return false;
+        currentSeenWords.add(lower);
+        return true;
+      });
+
+      if (uniqueNew.length === 0) return;
+
+      // Check saved status in parallel
+      const savedChecks = await Promise.all(
+        uniqueNew.map(async (w) => {
+          try {
+            return await checkVocabularySaved(w.word);
+          } catch {
+            return false;
+          }
+        })
+      );
+
+      const wordsWithStatus: VocabWord[] = uniqueNew.map((w, i) => ({
+        ...w,
+        saved: savedChecks[i],
+        saving: false,
+      }));
+
+      set(state => ({
+        vocabulary: [...state.vocabulary, ...wordsWithStatus],
+        vocabSeenWords: currentSeenWords,
+      }));
+    };
+
+    try {
+      // Process first batch immediately for quick display
+      if (batches.length > 0) {
+        const firstResult = await extractVocabulary(batches[0].join(' '));
+        await addNewWords(firstResult.vocabulary);
+        set({ vocabProgress: { current: 1, total: batches.length } });
+      }
+
+      // Process remaining batches in background with delay
+      for (let i = 1; i < batches.length; i++) {
+        // Add delay between batches (2 seconds) to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        try {
+          const result = await extractVocabulary(batches[i].join(' '));
+          await addNewWords(result.vocabulary);
+          set({ vocabProgress: { current: i + 1, total: batches.length } });
+        } catch (e) {
+          console.error(`Batch ${i + 1} failed:`, e);
+          // Continue with next batch even if one fails
+        }
+      }
+    } catch (e) {
+      set({ vocabError: e instanceof Error ? e.message : 'Failed to extract vocabulary' });
+    } finally {
+      set({ isExtractingVocab: false });
+    }
+  },
+
+  // Save a single word
+  saveWord: async (index: number) => {
+    const { vocabulary, videoInfo } = get();
+    const word = vocabulary[index];
+    if (!word || word.saved || word.saving) return;
+
+    set(state => ({
+      vocabulary: state.vocabulary.map((w, i) =>
+        i === index ? { ...w, saving: true } : w
+      ),
+    }));
+
+    try {
+      await saveVocabulary({
+        word: word.word,
+        meaning: word.meaning,
+        level: word.level,
+        example: word.example,
+        source_video_id: videoInfo?.video_id,
+      });
+
+      set(state => ({
+        vocabulary: state.vocabulary.map((w, i) =>
+          i === index ? { ...w, saved: true, saving: false } : w
+        ),
+      }));
+    } catch {
+      set(state => ({
+        vocabulary: state.vocabulary.map((w, i) =>
+          i === index ? { ...w, saving: false } : w
+        ),
+      }));
+    }
+  },
+
+  // Save all unsaved words
+  saveAllWords: async () => {
+    const { vocabulary, videoInfo } = get();
+    const unsavedIndices = vocabulary
+      .map((w, i) => (!w.saved && !w.saving ? i : -1))
+      .filter(i => i >= 0);
+
+    if (unsavedIndices.length === 0) return;
+
+    // Mark all as saving
+    set(state => ({
+      vocabulary: state.vocabulary.map(w =>
+        !w.saved ? { ...w, saving: true } : w
+      ),
+    }));
+
+    // Save each word
+    for (const index of unsavedIndices) {
+      const word = get().vocabulary[index];
+      if (!word) continue;
+
+      try {
+        await saveVocabulary({
+          word: word.word,
+          meaning: word.meaning,
+          level: word.level,
+          example: word.example,
+          source_video_id: videoInfo?.video_id,
+        });
+
+        set(state => ({
+          vocabulary: state.vocabulary.map((w, i) =>
+            i === index ? { ...w, saved: true, saving: false } : w
+          ),
+        }));
+      } catch {
+        set(state => ({
+          vocabulary: state.vocabulary.map((w, i) =>
+            i === index ? { ...w, saving: false } : w
+          ),
+        }));
+      }
+    }
+  },
+
+  // Set mind map content
+  setMindMapContent: (content: string | null) => {
+    set({ mindMapContent: content });
+  },
+
+  // Set slides content
+  setSlidesContent: (slides: Slide[] | null) => {
+    set({ slidesContent: slides });
+  },
+
+  // Set slides generating state
+  setIsGeneratingSlides: (isGenerating: boolean) => {
+    set({ isGeneratingSlides: isGenerating });
+  },
+
+  // Toggle subtitle visibility
+  toggleSubtitle: () => {
+    set(state => ({ showSubtitle: !state.showSubtitle }));
+  },
+
+  // Retry translation for specific indices
+  retryTranslation: async (indices: number[]) => {
+    const { subtitlesEn, translations, videoInfo } = get();
+    if (indices.length === 0 || !videoInfo) return;
+
+    // Get subtitles for the specified indices
+    const batch = indices.map(i => subtitlesEn[i]).filter(Boolean);
+    if (batch.length === 0) return;
+
+    set({ isTranslating: true });
+
+    try {
+      const result = await translateSubtitles(batch);
+
+      // Update translations map
+      const newTranslations = new Map(translations);
+      result.translations.forEach((text, i) => {
+        if (text && !text.includes('翻译失败')) {
+          newTranslations.set(indices[i], text);
+        }
+      });
+
+      set({ translations: newTranslations, isTranslating: false });
+
+      // Update cache
+      const transObj: Record<number, string> = {};
+      newTranslations.forEach((v, k) => { transObj[k] = v; });
+      setVideoCache(videoInfo.video_id, {
+        videoInfo,
+        subtitlesEn,
+        translations: transObj,
+        chapters: get().chapters,
+      });
+    } catch (e) {
+      console.error('Retry translation failed:', e);
+      set({ isTranslating: false });
+    }
   },
 }));
 
@@ -220,6 +669,19 @@ async function requestTranslationBatch(startIndex: number) {
       translatedUpTo: endIndex - 1,
       isTranslating: false,
     });
+
+    // Update cache with new translations
+    const updatedState = useVideoStore.getState();
+    if (updatedState.videoInfo) {
+      const transObj: Record<number, string> = {};
+      newTranslations.forEach((v, k) => { transObj[k] = v; });
+      setVideoCache(updatedState.videoInfo.video_id, {
+        videoInfo: updatedState.videoInfo,
+        subtitlesEn: updatedState.subtitlesEn,
+        translations: transObj,
+        chapters: updatedState.chapters,
+      });
+    }
   } catch (e) {
     console.error('Translation batch failed:', e);
     useVideoStore.setState({ isTranslating: false });
@@ -228,8 +690,11 @@ async function requestTranslationBatch(startIndex: number) {
   }
 
   // Check if we need another batch (if user has progressed)
-  const { activeSubtitleIndex, translatedUpTo } = useVideoStore.getState();
-  if (activeSubtitleIndex + TRANSLATION_LOOK_AHEAD > translatedUpTo) {
-    requestTranslationBatch(translatedUpTo + 1);
-  }
+  // Add a small delay to avoid overwhelming the API
+  setTimeout(() => {
+    const { activeSubtitleIndex, translatedUpTo, subtitlesEn } = useVideoStore.getState();
+    if (activeSubtitleIndex + TRANSLATION_LOOK_AHEAD > translatedUpTo && translatedUpTo < subtitlesEn.length - 1) {
+      requestTranslationBatch(translatedUpTo + 1);
+    }
+  }, 1000);
 }

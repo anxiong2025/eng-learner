@@ -1,7 +1,8 @@
+mod auth;
+mod db;
+mod models;
 mod routes;
 mod services;
-mod models;
-mod db;
 
 use axum::{routing::get, Router};
 use tower_http::cors::{Any, CorsLayer};
@@ -30,7 +31,7 @@ async fn main() {
         .nest("/api", routes::api_routes(db_pool))
         .layer(cors);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3001".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

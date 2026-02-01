@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
-import { BookOpen, Settings, GraduationCap, BarChart3 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, BookOpen, BarChart3 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AuthDialog } from '@/components/AuthDialog';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -10,57 +11,74 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children, hideHeader = false, onNavigate, currentView = 'home' }: MainLayoutProps) {
+  const navigate = useNavigate();
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header - hidden during video learning */}
       {!hideHeader && (
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="max-w-7xl mx-auto flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6">
-            <div
-              className="flex items-center gap-2 sm:gap-3 cursor-pointer"
-              onClick={() => onNavigate?.('home')}
-            >
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary to-blue-600 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-primary/20">
-                <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-base sm:text-lg font-bold tracking-tight">EngLearner</h1>
-                <p className="text-xs text-muted-foreground hidden sm:block">Learn English with YouTube</p>
-              </div>
-            </div>
+        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="max-w-7xl mx-auto flex h-12 items-center justify-between px-4 sm:px-6">
+            {/* Back to home */}
+            {currentView !== 'home' ? (
+              <button
+                onClick={() => onNavigate?.('home')}
+                className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Back"
+              >
+                <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+              </button>
+            ) : (
+              <div className="w-5" />
+            )}
 
-            <nav className="flex items-center gap-1 sm:gap-2">
-              <Button
-                variant={currentView === 'vocabulary' ? 'default' : 'ghost'}
-                size="sm"
-                className="px-2 sm:px-3"
-                onClick={() => onNavigate?.('vocabulary')}
+            {/* Right side - Nav + Auth */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {currentView !== 'vocabulary' && (
+                <button
+                  onClick={() => onNavigate?.('vocabulary')}
+                  className="h-9 w-9 sm:h-8 sm:w-8 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  title="Vocabulary"
+                >
+                  <BookOpen className="w-4 h-4" />
+                </button>
+              )}
+              {currentView !== 'stats' && (
+                <button
+                  onClick={() => onNavigate?.('stats')}
+                  className="h-9 w-9 sm:h-8 sm:w-8 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  title="Stats"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/about')}
+                className="px-2 h-8 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                <BookOpen className="w-4 h-4" />
-                <span className="hidden sm:inline ml-1">单词本</span>
-              </Button>
-              <Button
-                variant={currentView === 'stats' ? 'default' : 'ghost'}
-                size="sm"
-                className="px-2 sm:px-3"
-                onClick={() => onNavigate?.('stats')}
-              >
-                <BarChart3 className="w-4 h-4" />
-                <span className="hidden sm:inline ml-1">统计</span>
-              </Button>
-              <Button variant="outline" size="sm" className="px-2 sm:px-3">
-                <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline ml-1">设置</span>
-              </Button>
-            </nav>
+                About
+              </button>
+              <AuthDialog />
+            </div>
           </div>
         </header>
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4 sm:p-6">
+      <main className="w-full flex-1 flex items-center justify-center">
         {children}
       </main>
+
+      {/* Footer */}
+      <footer className="w-full py-3 mt-auto border-t border-border/50">
+        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+          <a href="/about" className="hover:text-foreground transition-colors">About Us</a>
+          <span className="text-border">•</span>
+          <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
+          <span className="text-border">•</span>
+          <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
+        </div>
+      </footer>
     </div>
   );
 }

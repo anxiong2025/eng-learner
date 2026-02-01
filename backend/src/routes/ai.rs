@@ -2,7 +2,7 @@ use axum::{routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 
 use crate::models::{ApiResponse, Subtitle};
-use crate::services::ai::{get_ai_provider, VocabularyItem};
+use crate::services::ai::{get_ai_provider, Chapter, Slide, VocabularyItem};
 
 pub fn routes() -> Router {
     Router::new()
@@ -10,6 +10,9 @@ pub fn routes() -> Router {
         .route("/ask", post(ask_question))
         .route("/translate", post(translate_subtitles))
         .route("/vocabulary", post(extract_vocabulary))
+        .route("/mindmap", post(generate_mindmap))
+        .route("/slides", post(generate_slides))
+        .route("/chapters", post(generate_chapters))
 }
 
 #[derive(Deserialize)]
@@ -104,5 +107,79 @@ async fn extract_vocabulary(
     match provider.extract_vocabulary(&payload.text).await {
         Ok(vocabulary) => Json(ApiResponse::success(VocabularyResponse { vocabulary })),
         Err(e) => Json(ApiResponse::error(format!("Vocabulary extraction failed: {}", e))),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MindMapRequest {
+    title: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+pub struct MindMapResponse {
+    markdown: String,
+}
+
+async fn generate_mindmap(
+    Json(payload): Json<MindMapRequest>,
+) -> Json<ApiResponse<MindMapResponse>> {
+    let provider = match get_ai_provider() {
+        Ok(p) => p,
+        Err(e) => return Json(ApiResponse::error(format!("AI provider error: {}", e))),
+    };
+
+    match provider.generate_mindmap(&payload.title, &payload.content).await {
+        Ok(markdown) => Json(ApiResponse::success(MindMapResponse { markdown })),
+        Err(e) => Json(ApiResponse::error(format!("Mind map generation failed: {}", e))),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SlidesRequest {
+    title: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+pub struct SlidesResponse {
+    slides: Vec<Slide>,
+}
+
+async fn generate_slides(
+    Json(payload): Json<SlidesRequest>,
+) -> Json<ApiResponse<SlidesResponse>> {
+    let provider = match get_ai_provider() {
+        Ok(p) => p,
+        Err(e) => return Json(ApiResponse::error(format!("AI provider error: {}", e))),
+    };
+
+    match provider.generate_slides(&payload.title, &payload.content).await {
+        Ok(slides) => Json(ApiResponse::success(SlidesResponse { slides })),
+        Err(e) => Json(ApiResponse::error(format!("Slides generation failed: {}", e))),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ChaptersRequest {
+    subtitles: Vec<Subtitle>,
+}
+
+#[derive(Serialize)]
+pub struct ChaptersResponse {
+    chapters: Vec<Chapter>,
+}
+
+async fn generate_chapters(
+    Json(payload): Json<ChaptersRequest>,
+) -> Json<ApiResponse<ChaptersResponse>> {
+    let provider = match get_ai_provider() {
+        Ok(p) => p,
+        Err(e) => return Json(ApiResponse::error(format!("AI provider error: {}", e))),
+    };
+
+    match provider.generate_chapters(&payload.subtitles).await {
+        Ok(chapters) => Json(ApiResponse::success(ChaptersResponse { chapters })),
+        Err(e) => Json(ApiResponse::error(format!("Chapters generation failed: {}", e))),
     }
 }

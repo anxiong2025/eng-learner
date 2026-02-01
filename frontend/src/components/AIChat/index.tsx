@@ -1,36 +1,81 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Loader2, MessageCircle } from 'lucide-react';
+import { ArrowUp, Sparkles, Loader2, ChevronDown, StickyNote, Check } from 'lucide-react';
 import { useVideoStore } from '@/stores/videoStore';
+import { useAuthStore } from '@/store/authStore';
+import { useNoteStore } from '@/stores/noteStore';
 import { askAI } from '@/api/client';
 import { ChatMessage } from './ChatMessage';
 import type { ChatMessage as ChatMessageType } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
+import { AuthDialog } from '@/components/AuthDialog';
+
+const FREE_QUESTION_LIMIT = 3;
+const STORAGE_KEY = 'englearner_ai_questions';
+
+type InputMode = 'note' | 'ai';
 
 export function AIChat() {
-  const { subtitlesEn, activeSubtitleIndex, videoInfo, playerState } = useVideoStore();
+  const { subtitlesEn, activeSubtitleIndex, videoInfo, currentTime } = useVideoStore();
+  const { isAuthenticated } = useAuthStore();
+  const { addNote } = useNoteStore();
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [mode, setMode] = useState<InputMode>('note');
+  const [questionCount, setQuestionCount] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? parseInt(saved, 10) : 0;
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const isPaused = playerState === 'paused';
+  const remainingQuestions = FREE_QUESTION_LIMIT - questionCount;
+  const isLimitReached = !isAuthenticated && questionCount >= FREE_QUESTION_LIMIT;
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && isExpanded) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isExpanded]);
 
-  const handleSend = async () => {
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
+    }
+  }, [input]);
+
+  const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
+
+    if (mode === 'note') {
+      await handleSaveNote();
+    } else {
+      await handleAskAI();
+    }
+  };
+
+  const handleAskAI = async () => {
+    // Check limit for non-authenticated users
+    if (!isAuthenticated && questionCount >= FREE_QUESTION_LIMIT) {
+      setShowAuthDialog(true);
+      return;
+    }
 
     const question = input.trim();
     setInput('');
+    setIsExpanded(true);
+
+    // Increment question count for non-authenticated users
+    if (!isAuthenticated) {
+      const newCount = questionCount + 1;
+      setQuestionCount(newCount);
+      localStorage.setItem(STORAGE_KEY, newCount.toString());
+    }
 
     // Build context from current and surrounding subtitles
     const contextStart = Math.max(0, activeSubtitleIndex - 2);
@@ -71,102 +116,185 @@ export function AIChat() {
     }
   };
 
+  const handleSaveNote = async () => {
+    if (!input.trim() || !videoInfo) return;
+
+    await addNote({
+      video_id: videoInfo.video_id,
+      timestamp: currentTime,
+      note_text: input.trim(),
+    });
+
+    setInput('');
+    setNoteSaved(true);
+    setTimeout(() => setNoteSaved(false), 2000);
+  };
+
+  const handleSaveMessageAsNote = async (content: string) => {
+    if (!videoInfo) return;
+
+    await addNote({
+      video_id: videoInfo.video_id,
+      timestamp: currentTime,
+      note_text: content,
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSubmit();
     }
   };
 
   if (!videoInfo) {
-    return (
-      <Card className="h-full flex items-center justify-center">
-        <CardContent className="text-center p-8">
-          <MessageCircle className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-          <p className="text-muted-foreground">Load a video to start asking questions</p>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
+  const isAIMode = mode === 'ai';
+
   return (
-    <Card className="h-full flex flex-col">
-      {/* Header */}
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2 sm:pb-3 px-3 sm:px-6">
-        <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-violet-500" />
-          Ask AI
-        </CardTitle>
-        {isPaused && (
-          <Badge variant="outline" className="text-[10px] sm:text-xs bg-green-50 text-green-700 border-green-200">
-            Ready to ask
-          </Badge>
-        )}
-      </CardHeader>
-
-      {/* Chat Messages */}
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full" ref={scrollRef}>
-          <div className="p-3 sm:p-4 pt-0 space-y-2 sm:space-y-3">
-            {messages.length === 0 ? (
-              <div className="text-center py-4 sm:py-8">
-                <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 sm:mb-3 text-muted-foreground/50" />
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  Pause the video and ask questions about the content
-                </p>
-                <div className="mt-3 sm:mt-4 space-y-2">
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">Try asking:</p>
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center px-2">
-                    {['What does this mean?', 'Explain the grammar', 'Give me examples'].map((q) => (
-                      <Button
-                        key={q}
-                        variant="outline"
-                        size="sm"
-                        className="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3"
-                        onClick={() => setInput(q)}
-                      >
-                        {q}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
-              ))
-            )}
-            {isLoading && (
-              <div className="flex items-center gap-2 text-muted-foreground p-2 sm:p-3">
-                <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
-                <span className="text-xs sm:text-sm">Thinking...</span>
-              </div>
-            )}
+    <>
+      {/* Expandable Chat Drawer - only shows in AI mode with messages */}
+      {isAIMode && (
+        <div
+          className={`border-t border-border bg-background transition-all duration-300 ease-out ${
+            isExpanded && messages.length > 0 ? 'h-[280px]' : 'h-0'
+          } overflow-hidden`}
+        >
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Assistant</span>
+            </div>
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="p-1 hover:bg-muted rounded-md transition-colors"
+            >
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            </button>
           </div>
-        </ScrollArea>
-      </CardContent>
 
-      {/* Input */}
-      <div className="p-2 sm:p-4 border-t">
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about the current sentence..."
-            disabled={isLoading}
-            className="flex-1 h-9 sm:h-10 text-sm"
-          />
-          <Button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            size="icon"
-            className="h-9 w-9 sm:h-10 sm:w-10"
+          {/* Messages */}
+          <div
+            ref={scrollRef}
+            className="h-[calc(100%-40px)] overflow-y-auto px-4 py-3"
           >
-            <Send className="w-4 h-4" />
-          </Button>
+            <div className="space-y-3">
+              {messages.map((message) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  onSaveAsNote={handleSaveMessageAsNote}
+                />
+              ))}
+              {isLoading && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span className="text-xs">Thinking...</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Input Area */}
+      <div className={`border-t bg-background px-4 py-3 ${isAIMode ? 'border-primary/30' : 'border-border'}`}>
+        {isLimitReached && isAIMode ? (
+          <div className="text-center py-1">
+            <p className="text-xs text-muted-foreground mb-2">
+              {FREE_QUESTION_LIMIT} free questions used
+            </p>
+            <button
+              onClick={() => setShowAuthDialog(true)}
+              className="text-xs text-primary hover:underline"
+            >
+              Sign in for unlimited
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Textarea Input */}
+            <div className={`relative rounded-lg border ${isAIMode ? 'border-primary/50 bg-primary/5' : 'border-border bg-muted/30'}`}>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={isAIMode ? "Ask about the video..." : "Capture your thoughts..."}
+                disabled={isLoading}
+                rows={1}
+                className="w-full resize-none bg-transparent px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 min-h-[40px] max-h-[120px]"
+              />
+
+              {/* Bottom bar with mode toggle and submit */}
+              <div className="flex items-center justify-between px-2 pb-2">
+                {/* Mode Toggle */}
+                <button
+                  onClick={() => {
+                    setMode(isAIMode ? 'note' : 'ai');
+                    if (!isAIMode && messages.length > 0) {
+                      setIsExpanded(true);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors ${
+                    isAIMode
+                      ? 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                      : 'text-primary hover:bg-primary/10'
+                  }`}
+                >
+                  {isAIMode ? (
+                    <>
+                      <StickyNote className="w-3.5 h-3.5" />
+                      <span>Note mode</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Ask AI</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Submit Button */}
+                <button
+                  onClick={handleSubmit}
+                  disabled={!input.trim() || isLoading}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                    noteSaved
+                      ? 'bg-green-500 text-white'
+                      : input.trim() && !isLoading
+                        ? isAIMode
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'bg-foreground text-background hover:bg-foreground/90'
+                        : 'bg-muted text-muted-foreground/50'
+                  }`}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : noteSaved ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <ArrowUp className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Helper text */}
+            {isAIMode && !isAuthenticated && remainingQuestions > 0 && remainingQuestions < FREE_QUESTION_LIMIT && (
+              <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+                {remainingQuestions} free question{remainingQuestions !== 1 ? 's' : ''} left
+              </p>
+            )}
+          </>
+        )}
       </div>
-    </Card>
+
+      {/* Auth Dialog */}
+      <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} showTrigger={false} />
+    </>
   );
 }
