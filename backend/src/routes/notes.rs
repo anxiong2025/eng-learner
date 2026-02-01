@@ -67,9 +67,9 @@ async fn get_notes(
     let user_id = auth.user_id_or_default();
 
     let notes = if let Some(video_id) = query.video_id {
-        db::get_notes_by_video(&db_pool, user_id, &video_id)
+        db::get_notes_by_video(&db_pool, user_id, &video_id).await
     } else {
-        db::get_notes(&db_pool, user_id)
+        db::get_notes(&db_pool, user_id).await
     };
 
     match notes {
@@ -116,7 +116,7 @@ async fn save_note(
         created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
     };
 
-    match db::save_note(&db_pool, &note) {
+    match db::save_note(&db_pool, &note).await {
         Ok(_) => {
             let response: NoteResponse = note.into();
             (StatusCode::CREATED, Json(response)).into_response()
@@ -140,7 +140,7 @@ async fn delete_note(
 ) -> impl IntoResponse {
     let user_id = auth.user_id_or_default();
 
-    match db::delete_note(&db_pool, user_id, &note_id) {
+    match db::delete_note(&db_pool, user_id, &note_id).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => {
             tracing::error!("Failed to delete note: {}", e);

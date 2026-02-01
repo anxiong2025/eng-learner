@@ -15,7 +15,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     // Initialize database
-    let db_pool = db::init_db().expect("Failed to initialize database");
+    let db_pool = db::init_db().await.expect("Failed to initialize database");
 
     // Log AI provider configuration
     let ai_provider = std::env::var("AI_PROVIDER").unwrap_or_else(|_| "gemini".to_string());

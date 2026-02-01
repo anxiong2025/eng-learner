@@ -17,7 +17,7 @@ anyhow = "1"
 regex = "1"
 dotenvy = "0.15"
 async-trait = "0.1"
-rusqlite = { version = "0.31", features = ["bundled"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2"
 jsonwebtoken = "9"

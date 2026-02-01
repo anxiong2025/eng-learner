@@ -24,10 +24,11 @@ FROM debian:trixie-slim
 
 WORKDIR /app
 
-# Install runtime dependencies including yt-dlp for YouTube video parsing
+# Install runtime dependencies including yt-dlp for YouTube video parsing and PostgreSQL client
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    libpq5 \
     python3 \
     python3-pip \
     ffmpeg \

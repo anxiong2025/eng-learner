@@ -200,7 +200,7 @@ async fn google_callback(
     };
 
     // Save user to database
-    if let Err(e) = db::upsert_user(&db_pool, &user) {
+    if let Err(e) = db::upsert_user(&db_pool, &user).await {
         tracing::error!("Failed to save user to database: {}", e);
         return Redirect::temporary(&format!("{}?error=db_error", frontend_url));
     }
@@ -323,7 +323,7 @@ async fn github_callback(
     };
 
     // Save user to database
-    if let Err(e) = db::upsert_user(&db_pool, &user) {
+    if let Err(e) = db::upsert_user(&db_pool, &user).await {
         tracing::error!("Failed to save user to database: {}", e);
         return Redirect::temporary(&format!("{}?error=db_error", frontend_url));
     }

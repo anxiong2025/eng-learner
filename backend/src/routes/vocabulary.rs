@@ -55,10 +55,10 @@ async fn save_vocabulary(
         payload.example.as_deref(),
         payload.source_video_id.as_deref(),
         payload.source_sentence.as_deref(),
-    ) {
+    ).await {
         Ok(id) => {
             // Record learning statistics
-            let _ = db::record_word_learned(&pool, user_id);
+            let _ = db::record_word_learned(&pool, user_id).await;
             Json(ApiResponse::success(SaveVocabularyResponse { id }))
         }
         Err(e) => Json(ApiResponse::error(format!("Failed to save: {}", e))),
@@ -84,7 +84,7 @@ async fn list_vocabulary(
     let user_id = auth.user_id_or_default();
     let due_only = query.due_only.unwrap_or(false);
 
-    match db::get_vocabulary_list(&pool, user_id, due_only) {
+    match db::get_vocabulary_list(&pool, user_id, due_only).await {
         Ok(vocabulary) => {
             let total = vocabulary.len();
             Json(ApiResponse::success(ListVocabularyResponse { vocabulary, total }))
@@ -106,10 +106,10 @@ async fn review_vocabulary(
 ) -> Json<ApiResponse<()>> {
     let user_id = auth.user_id_or_default();
 
-    match db::review_vocabulary(&pool, user_id, payload.vocab_id, payload.quality) {
+    match db::review_vocabulary(&pool, user_id, payload.vocab_id, payload.quality).await {
         Ok(_) => {
             // Record review statistics (quality >= 2 is considered correct)
-            let _ = db::record_review(&pool, user_id, payload.quality >= 2);
+            let _ = db::record_review(&pool, user_id, payload.quality >= 2).await;
             Json(ApiResponse::success(()))
         }
         Err(e) => Json(ApiResponse::error(format!("Failed to review: {}", e))),
@@ -123,7 +123,7 @@ async fn delete_vocabulary(
 ) -> Json<ApiResponse<()>> {
     let user_id = auth.user_id_or_default();
 
-    match db::delete_vocabulary(&pool, user_id, id) {
+    match db::delete_vocabulary(&pool, user_id, id).await {
         Ok(_) => Json(ApiResponse::success(())),
         Err(e) => Json(ApiResponse::error(format!("Failed to delete: {}", e))),
     }
@@ -141,7 +141,7 @@ async fn check_vocabulary(
 ) -> Json<ApiResponse<CheckVocabularyResponse>> {
     let user_id = auth.user_id_or_default();
 
-    match db::is_vocabulary_saved(&pool, user_id, &word) {
+    match db::is_vocabulary_saved(&pool, user_id, &word).await {
         Ok(saved) => Json(ApiResponse::success(CheckVocabularyResponse { saved })),
         Err(e) => Json(ApiResponse::error(format!("Failed to check: {}", e))),
     }
@@ -169,7 +169,7 @@ async fn start_ai_review(
     let user_id = &auth.user_id;
 
     // Get vocabulary details for the requested IDs
-    let vocab_list = match db::get_vocabulary_list(&pool, user_id, false) {
+    let vocab_list = match db::get_vocabulary_list(&pool, user_id, false).await {
         Ok(list) => list,
         Err(e) => return Json(ApiResponse::error(format!("Failed to get vocabulary: {}", e))),
     };
@@ -295,12 +295,12 @@ async fn submit_ai_review_answer(
     };
 
     // Update vocabulary review status based on AI evaluation
-    if let Err(e) = db::review_vocabulary(&pool, user_id, payload.vocab_id, evaluation.quality) {
+    if let Err(e) = db::review_vocabulary(&pool, user_id, payload.vocab_id, evaluation.quality).await {
         tracing::warn!("Failed to update review status: {}", e);
     }
 
     // Record review statistics
-    let _ = db::record_review(&pool, user_id, evaluation.is_correct);
+    let _ = db::record_review(&pool, user_id, evaluation.is_correct).await;
 
     Json(ApiResponse::success(SubmitAnswerResponse { evaluation }))
 }

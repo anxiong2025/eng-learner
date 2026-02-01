@@ -28,7 +28,7 @@ async fn add_history(
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let user_id = auth.user_id_or_default().to_string();
 
-    db::add_watch_history(&pool, &user_id, &req.video_id, &req.title, &req.thumbnail)
+    db::add_watch_history(&pool, &user_id, &req.video_id, &req.title, &req.thumbnail).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "success": true })))
@@ -41,7 +41,7 @@ async fn get_history(
 ) -> Result<Json<HistoryResponse>, (axum::http::StatusCode, String)> {
     let user_id = auth.user_id_or_default().to_string();
 
-    let history = db::get_watch_history(&pool, &user_id, 20)
+    let history = db::get_watch_history(&pool, &user_id, 20).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(HistoryResponse { history }))
@@ -60,7 +60,7 @@ async fn delete_history(
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let user_id = auth.user_id_or_default().to_string();
 
-    db::delete_watch_history(&pool, &user_id, &req.video_id)
+    db::delete_watch_history(&pool, &user_id, &req.video_id).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "success": true })))
@@ -73,7 +73,7 @@ async fn clear_history(
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let user_id = auth.user_id_or_default().to_string();
 
-    db::clear_watch_history(&pool, &user_id)
+    db::clear_watch_history(&pool, &user_id).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "success": true })))

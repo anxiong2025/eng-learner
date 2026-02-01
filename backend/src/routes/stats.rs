@@ -25,7 +25,7 @@ async fn get_today_stats(
 ) -> Json<ApiResponse<DailyStats>> {
     let user_id = auth.user_id_or_default();
 
-    match db::get_today_stats(&pool, user_id) {
+    match db::get_today_stats(&pool, user_id).await {
         Ok(stats) => Json(ApiResponse::success(stats)),
         Err(e) => Json(ApiResponse::error(format!("Failed to get today stats: {}", e))),
     }
@@ -44,7 +44,7 @@ async fn get_daily_stats(
     let user_id = auth.user_id_or_default();
     let days = query.days.unwrap_or(7);
 
-    match db::get_daily_stats(&pool, user_id, days) {
+    match db::get_daily_stats(&pool, user_id, days).await {
         Ok(stats) => Json(ApiResponse::success(stats)),
         Err(e) => Json(ApiResponse::error(format!("Failed to get daily stats: {}", e))),
     }
@@ -56,7 +56,7 @@ async fn get_progress(
 ) -> Json<ApiResponse<UserProgress>> {
     let user_id = auth.user_id_or_default();
 
-    match db::get_user_progress(&pool, user_id) {
+    match db::get_user_progress(&pool, user_id).await {
         Ok(progress) => Json(ApiResponse::success(progress)),
         Err(e) => Json(ApiResponse::error(format!("Failed to get progress: {}", e))),
     }
@@ -76,17 +76,17 @@ async fn get_overview(
 ) -> Json<ApiResponse<LearningOverview>> {
     let user_id = auth.user_id_or_default();
 
-    let today = match db::get_today_stats(&pool, user_id) {
+    let today = match db::get_today_stats(&pool, user_id).await {
         Ok(s) => s,
         Err(e) => return Json(ApiResponse::error(format!("Failed to get today stats: {}", e))),
     };
 
-    let progress = match db::get_user_progress(&pool, user_id) {
+    let progress = match db::get_user_progress(&pool, user_id).await {
         Ok(p) => p,
         Err(e) => return Json(ApiResponse::error(format!("Failed to get progress: {}", e))),
     };
 
-    let weekly_stats = match db::get_daily_stats(&pool, user_id, 7) {
+    let weekly_stats = match db::get_daily_stats(&pool, user_id, 7).await {
         Ok(s) => s,
         Err(e) => return Json(ApiResponse::error(format!("Failed to get weekly stats: {}", e))),
     };
@@ -125,7 +125,7 @@ async fn get_memory_distribution(
     let user_id = auth.user_id_or_default();
 
     // Get all vocabulary with memory_strength
-    let vocab_list = match db::get_vocabulary_list(&pool, user_id, false) {
+    let vocab_list = match db::get_vocabulary_list(&pool, user_id, false).await {
         Ok(list) => list,
         Err(e) => return Json(ApiResponse::error(format!("Failed to get vocabulary: {}", e))),
     };
