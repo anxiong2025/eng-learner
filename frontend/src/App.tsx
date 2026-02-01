@@ -669,16 +669,16 @@ function WatchPage() {
       {/* Main viewport - exactly screen height, with top padding for fixed header */}
       <div className="h-screen pt-14 flex flex-col overflow-hidden">
         {/* Main Content - fills remaining viewport height */}
-        <main className="flex-1 overflow-hidden px-6 sm:px-10 lg:px-20 py-4">
-          <div className="flex flex-col lg:flex-row gap-6 max-w-[1300px] mx-auto justify-center h-full">
+        <main className="flex-1 overflow-y-auto lg:overflow-hidden px-4 sm:px-10 lg:px-20 py-4">
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 max-w-[1300px] mx-auto justify-center h-full">
             {/* Left: Video Player */}
-            <div className="flex-1 lg:max-w-[680px] flex flex-col h-full overflow-hidden">
+            <div className="shrink-0 lg:flex-1 lg:max-w-[680px] flex flex-col overflow-hidden">
               <VideoPlayer />
               <CurrentSubtitle />
             </div>
 
             {/* Right: Tabbed Panel */}
-            <div className="w-full lg:w-[450px] max-h-[calc(100vh-140px)] shrink-0 bg-background rounded-xl border border-border/30 flex flex-col overflow-hidden">
+            <div className="w-full lg:w-[450px] h-[50vh] lg:h-auto lg:max-h-[calc(100vh-140px)] shrink-0 bg-background rounded-xl border border-border/30 flex flex-col overflow-hidden">
               {/* Tabs - sticky */}
               <div className="flex items-center border-b border-border/50 px-4 pt-3 pb-0 shrink-0">
                 <button
