@@ -27,6 +27,7 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
+        .route("/", get(health_check))
         .route("/health", get(health_check))
         .nest("/api", routes::api_routes(db_pool))
         .layer(cors);
