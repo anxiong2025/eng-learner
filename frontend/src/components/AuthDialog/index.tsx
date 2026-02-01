@@ -21,7 +21,7 @@ import { LogOut, Check, Zap, Gift } from 'lucide-react';
 import { useAuthStore, type User } from '@/store/authStore';
 import { getUsageStatus, getInviteCode } from '@/api/client';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Dropdown menu for logged-in user
 function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
