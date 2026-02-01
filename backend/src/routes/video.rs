@@ -48,23 +48,6 @@ async fn parse_video(
     let tier = auth.tier_or_default();
     let url = payload.url.trim();
 
-    // Check rate limit
-    let (can_parse, remaining) = match db::check_can_parse_video(&pool, user_id, tier).await {
-        Ok(result) => result,
-        Err(e) => {
-            tracing::error!("Failed to check usage limit: {}", e);
-            // On error, allow the request but log it
-            (true, -1)
-        }
-    };
-
-    if !can_parse {
-        return Json(ApiResponse::error_with_code(
-            "RATE_LIMIT_EXCEEDED".to_string(),
-            "Daily limit reached. Free users can parse 5 videos per day.".to_string(),
-        ));
-    }
-
     // Validate URL
     if !url.contains("youtube.com") && !url.contains("youtu.be") {
         return Json(ApiResponse::error("Invalid YouTube URL"));
@@ -76,12 +59,39 @@ async fn parse_video(
         None => return Json(ApiResponse::error("Could not extract video ID")),
     };
 
+    // Demo video ID - skip rate limiting and counting for demo
+    const DEMO_VIDEO_ID: &str = "zxMjOqM7DFs";
+    let is_demo = video_id == DEMO_VIDEO_ID;
+
+    // Check rate limit (skip for demo video)
+    let remaining = if is_demo {
+        -1 // Demo doesn't count
+    } else {
+        let (can_parse, remaining) = match db::check_can_parse_video(&pool, user_id, tier).await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::error!("Failed to check usage limit: {}", e);
+                (true, -1)
+            }
+        };
+
+        if !can_parse {
+            return Json(ApiResponse::error_with_code(
+                "RATE_LIMIT_EXCEEDED".to_string(),
+                "Daily limit reached. Please try again tomorrow or invite friends for more quota.".to_string(),
+            ));
+        }
+        remaining
+    };
+
     // Fetch video info
     match youtube::fetch_video_info(&video_id).await {
         Ok(info) => {
-            // Increment usage count on success
-            if let Err(e) = db::increment_video_parse_count(&pool, user_id).await {
-                tracing::error!("Failed to increment usage count: {}", e);
+            // Increment usage count on success (skip for demo video)
+            if !is_demo {
+                if let Err(e) = db::increment_video_parse_count(&pool, user_id).await {
+                    tracing::error!("Failed to increment usage count: {}", e);
+                }
             }
 
             // Calculate actual remaining after this request

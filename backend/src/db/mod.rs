@@ -227,7 +227,7 @@ pub async fn upsert_user(pool: &DbPool, user: &User, ref_code: Option<&str>) -> 
         .fetch_optional(pool).await?;
 
     if existing.is_some() {
-        // Update existing user
+        // Update existing user (existing users don't count for invite bonus)
         sqlx::query(
             "UPDATE users SET name = $1, avatar = $2, last_login_at = $3 WHERE id = $4"
         )
@@ -254,7 +254,7 @@ pub async fn upsert_user(pool: &DbPool, user: &User, ref_code: Option<&str>) -> 
 
         // If this user was invited, give the inviter bonus quota
         if let Some(code) = ref_code {
-            add_bonus_quota_by_invite_code(pool, code, 3).await?;
+            add_bonus_quota_by_invite_code(pool, code, INVITE_BONUS_QUOTA).await?;
         }
     }
 
@@ -991,7 +991,7 @@ pub async fn clear_watch_history(pool: &DbPool, user_id: &str) -> Result<()> {
 // ============ Daily Usage / Rate Limiting Functions ============
 
 /// Base daily free quota (resets each day)
-pub const FREE_DAILY_BASE_LIMIT: i32 = 3;
+pub const FREE_DAILY_BASE_LIMIT: i32 = 5;
 /// Bonus quota per successful invite (permanent, cumulative)
 pub const INVITE_BONUS_QUOTA: i32 = 3;
 /// AI Chat daily limit (per user)

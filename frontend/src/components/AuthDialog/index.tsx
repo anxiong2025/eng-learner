@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { LogOut, Check, Zap, Gift } from 'lucide-react';
 import { useAuthStore, type User } from '@/store/authStore';
 import { getUsageStatus, getInviteCode } from '@/api/client';
@@ -70,8 +69,8 @@ function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
         {/* Usage info */}
         {usageInfo && (
           <>
-            <div className="px-2 py-3">
-              <div className="flex items-center justify-between mb-2">
+            <div className="px-2 py-2">
+              <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-amber-500" />
                   Today
@@ -80,11 +79,6 @@ function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
                   {usageInfo.remaining}/{usageInfo.limit}
                 </span>
               </div>
-              <Progress
-                value={(usageInfo.remaining / usageInfo.limit) * 100}
-                className="h-1.5 bg-muted/50"
-                indicatorClassName="bg-primary/60"
-              />
             </div>
             <DropdownMenuSeparator />
           </>
