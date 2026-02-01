@@ -19,8 +19,8 @@ COPY src ./src
 # Build the application
 RUN touch src/main.rs && cargo build --release
 
-# Runtime stage
-FROM debian:bookworm-slim
+# Runtime stage - must match GLIBC version from rust:latest (Debian Trixie)
+FROM debian:trixie-slim
 
 WORKDIR /app
 
