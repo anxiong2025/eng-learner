@@ -76,7 +76,7 @@ function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
                   Today
                 </span>
                 <span className="text-xs font-medium tabular-nums">
-                  {usageInfo.remaining}/{usageInfo.limit}
+                  {usageInfo.used}/{usageInfo.limit}
                 </span>
               </div>
             </div>
