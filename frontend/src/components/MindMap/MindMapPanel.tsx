@@ -256,7 +256,7 @@ export function MindMapPanel() {
               <div className="text-center">
                 <Brain className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground mb-3">Generate a mind map from video content</p>
-                <Button size="sm" onClick={generateMap}>
+                <Button size="sm" onClick={() => generateMap()}>
                   <Brain className="w-4 h-4 mr-2" />
                   Generate
                 </Button>
