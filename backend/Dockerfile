@@ -24,8 +24,8 @@ FROM debian:trixie-slim
 
 WORKDIR /app
 
-# Install runtime dependencies including yt-dlp for YouTube video parsing and PostgreSQL client
-# Node.js is needed as JavaScript runtime for yt-dlp to decrypt YouTube signatures
+# Install runtime dependencies including yt-dlp for YouTube video parsing
+# Node.js is required as JavaScript runtime for yt-dlp to decrypt YouTube signatures
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
@@ -35,7 +35,8 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     nodejs \
     && pip3 install --break-system-packages yt-dlp \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version
 
 # Copy the binary
 COPY --from=builder /app/target/release/eng-learner-backend .
