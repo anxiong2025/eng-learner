@@ -195,6 +195,10 @@ fn get_cookies_path() -> Option<String> {
     }
 }
 
+fn get_proxy() -> Option<String> {
+    std::env::var("YTDLP_PROXY").ok()
+}
+
 async fn fetch_video_info_ytdlp(video_id: &str) -> Result<VideoInfo> {
     let url = format!("https://www.youtube.com/watch?v={}", video_id);
 
@@ -202,6 +206,10 @@ async fn fetch_video_info_ytdlp(video_id: &str) -> Result<VideoInfo> {
     let cookies_path = get_cookies_path();
     if let Some(ref path) = cookies_path {
         args.extend(["--cookies", path.as_str()]);
+    }
+    let proxy = get_proxy();
+    if let Some(ref p) = proxy {
+        args.extend(["--proxy", p.as_str()]);
     }
     args.push(&url);
 
@@ -250,6 +258,10 @@ async fn fetch_subtitles_ytdlp(video_id: &str, lang: &str) -> Result<Vec<Subtitl
     let cookies_path = get_cookies_path();
     if let Some(ref path) = cookies_path {
         args.extend(["--cookies", path.as_str()]);
+    }
+    let proxy = get_proxy();
+    if let Some(ref p) = proxy {
+        args.extend(["--proxy", p.as_str()]);
     }
     args.extend(["-o", &output_path, &url]);
 
