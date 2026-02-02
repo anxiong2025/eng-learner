@@ -1,9 +1,56 @@
 use crate::models::{Subtitle, VideoInfo};
 use anyhow::{anyhow, Result};
+use chrono::{Datelike, Utc};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::process::Stdio;
+use std::sync::Mutex;
 use tokio::process::Command;
+
+// ============ Apify Rate Limiting ============
+
+/// Max Apify calls per user per day
+const APIFY_DAILY_LIMIT: u32 = 2;
+
+/// yt-dlp timeout before falling back to Apify (seconds)
+const YTDLP_TIMEOUT_SECS: u64 = 15;
+
+/// (user_id, year, day_of_year) -> usage count
+static APIFY_USAGE: Lazy<Mutex<HashMap<(String, i32, u32), u32>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn get_apify_usage_key(user_id: &str) -> (String, i32, u32) {
+    let now = Utc::now();
+    (user_id.to_string(), now.year(), now.ordinal())
+}
+
+fn check_apify_rate_limit(user_id: &str) -> bool {
+    let key = get_apify_usage_key(user_id);
+    let usage = APIFY_USAGE.lock().unwrap();
+    let count = usage.get(&key).copied().unwrap_or(0);
+    count < APIFY_DAILY_LIMIT
+}
+
+fn increment_apify_usage(user_id: &str) {
+    let key = get_apify_usage_key(user_id);
+    let mut usage = APIFY_USAGE.lock().unwrap();
+
+    // Clean old entries (keep only today's)
+    let (_, year, day) = &key;
+    usage.retain(|(_, y, d), _| y == year && d == day);
+
+    // Increment
+    *usage.entry(key).or_insert(0) += 1;
+}
+
+fn get_apify_remaining(user_id: &str) -> u32 {
+    let key = get_apify_usage_key(user_id);
+    let usage = APIFY_USAGE.lock().unwrap();
+    let count = usage.get(&key).copied().unwrap_or(0);
+    APIFY_DAILY_LIMIT.saturating_sub(count)
+}
 
 /// Extract video ID from YouTube URL
 pub fn extract_video_id(url: &str) -> Option<String> {
@@ -24,163 +71,151 @@ pub fn extract_video_id(url: &str) -> Option<String> {
     None
 }
 
-// ============ Supadata API ============
+// ============ Apify API ============
 
 #[derive(Debug, Deserialize)]
-struct SupadataVideoResponse {
+struct ApifyVideoResponse {
+    id: Option<String>,
     title: Option<String>,
-    duration: Option<f64>,
-    thumbnail: Option<String>,
-    #[allow(dead_code)]
-    channel: Option<SupadataChannel>,
+    duration: Option<String>, // Format: "00:03:33"
+    #[serde(rename = "thumbnailUrl")]
+    thumbnail_url: Option<String>,
+    subtitles: Option<Vec<ApifySubtitle>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct SupadataChannel {
-    #[allow(dead_code)]
-    name: Option<String>,
+struct ApifySubtitle {
+    language: Option<String>,
+    vtt: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct SupadataTranscriptResponse {
-    content: Option<Vec<SupadataSegment>>,
-    lang: Option<String>,
+fn get_apify_api_token() -> Option<String> {
+    std::env::var("APIFY_API_TOKEN").ok()
 }
 
-#[derive(Debug, Deserialize)]
-struct SupadataSegment {
-    text: String,
-    offset: f64,
-    duration: f64,
+/// Parse duration string "HH:MM:SS" to seconds
+fn parse_duration_string(duration: &str) -> f64 {
+    let parts: Vec<&str> = duration.split(':').collect();
+    match parts.len() {
+        3 => {
+            let hours: f64 = parts[0].parse().unwrap_or(0.0);
+            let minutes: f64 = parts[1].parse().unwrap_or(0.0);
+            let seconds: f64 = parts[2].parse().unwrap_or(0.0);
+            hours * 3600.0 + minutes * 60.0 + seconds
+        }
+        2 => {
+            let minutes: f64 = parts[0].parse().unwrap_or(0.0);
+            let seconds: f64 = parts[1].parse().unwrap_or(0.0);
+            minutes * 60.0 + seconds
+        }
+        _ => 0.0,
+    }
 }
 
-fn get_supadata_api_key() -> Option<String> {
-    std::env::var("SUPADATA_API_KEY").ok()
-}
-
-async fn fetch_video_info_supadata(video_id: &str) -> Result<VideoInfo> {
-    let api_key = get_supadata_api_key()
-        .ok_or_else(|| anyhow!("SUPADATA_API_KEY not configured"))?;
+async fn fetch_video_info_apify(video_id: &str) -> Result<VideoInfo> {
+    let api_token = get_apify_api_token()
+        .ok_or_else(|| anyhow!("APIFY_API_TOKEN not configured"))?;
 
     let client = reqwest::Client::new();
-    let url = format!("https://api.supadata.ai/v1/youtube/video?id={}", video_id);
+    let url = format!(
+        "https://api.apify.com/v2/acts/streamers~youtube-scraper/run-sync-get-dataset-items?token={}",
+        api_token
+    );
+    let video_url = format!("https://www.youtube.com/watch?v={}", video_id);
 
-    // Retry logic for rate limiting
-    let mut retries = 0;
-    let response = loop {
-        let resp = client
-            .get(&url)
-            .header("x-api-key", &api_key)
-            .send()
-            .await?;
+    let payload = serde_json::json!({
+        "startUrls": [{"url": video_url}],
+        "maxResults": 1
+    });
 
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS && retries < 2 {
-            retries += 1;
-            tracing::info!("Rate limited, waiting 1.5s before retry {}", retries);
-            tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-            continue;
-        }
-        break resp;
-    };
+    tracing::info!("Fetching video info from Apify for: {}", video_id);
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .timeout(std::time::Duration::from_secs(120))
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Supadata API error ({}): {}", status, text));
+        return Err(anyhow!("Apify API error ({}): {}", status, text));
     }
 
-    let data: SupadataVideoResponse = response.json().await?;
+    let data: Vec<ApifyVideoResponse> = response.json().await?;
+    let video = data.into_iter().next()
+        .ok_or_else(|| anyhow!("No video data returned from Apify"))?;
+
+    let duration = video.duration
+        .map(|d| parse_duration_string(&d))
+        .unwrap_or(0.0);
 
     Ok(VideoInfo {
-        video_id: video_id.to_string(),
-        title: data.title.unwrap_or_else(|| "Unknown".to_string()),
-        duration: data.duration.unwrap_or(0.0),
-        thumbnail: data.thumbnail.unwrap_or_else(|| {
+        video_id: video.id.unwrap_or_else(|| video_id.to_string()),
+        title: video.title.unwrap_or_else(|| "Unknown".to_string()),
+        duration,
+        thumbnail: video.thumbnail_url.unwrap_or_else(|| {
             format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", video_id)
         }),
     })
 }
 
-async fn fetch_subtitles_supadata(video_id: &str, lang: &str) -> Result<Vec<Subtitle>> {
-    let api_key = get_supadata_api_key()
-        .ok_or_else(|| anyhow!("SUPADATA_API_KEY not configured"))?;
+async fn fetch_subtitles_apify(video_id: &str, lang: &str) -> Result<Vec<Subtitle>> {
+    let api_token = get_apify_api_token()
+        .ok_or_else(|| anyhow!("APIFY_API_TOKEN not configured"))?;
 
     let client = reqwest::Client::new();
+    let url = format!(
+        "https://api.apify.com/v2/acts/streamers~youtube-scraper/run-sync-get-dataset-items?token={}",
+        api_token
+    );
     let video_url = format!("https://www.youtube.com/watch?v={}", video_id);
-    let mut api_url = format!("https://api.supadata.ai/v1/transcript?url={}", video_url);
 
-    if !lang.is_empty() {
-        api_url.push_str(&format!("&lang={}", lang));
-    }
+    // Apify only supports: en, de, es, fr, it, ja, ko, nl, pt, ru
+    let sub_lang = if lang == "zh" { "any" } else { lang };
 
-    // Retry logic for rate limiting
-    let mut retries = 0;
-    let response = loop {
-        let resp = client
-            .get(&api_url)
-            .header("x-api-key", &api_key)
-            .send()
-            .await?;
+    let payload = serde_json::json!({
+        "startUrls": [{"url": video_url}],
+        "maxResults": 1,
+        "downloadSubtitles": true,
+        "subtitlesLanguage": sub_lang,
+        "subtitlesFormat": "vtt"
+    });
 
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS && retries < 2 {
-            retries += 1;
-            tracing::info!("Rate limited on transcript, waiting 1.5s before retry {}", retries);
-            tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-            continue;
-        }
-        break resp;
-    };
+    tracing::info!("Fetching subtitles from Apify for: {} (lang: {})", video_id, lang);
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .timeout(std::time::Duration::from_secs(120))
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Supadata transcript API error ({}): {}", status, text));
+        return Err(anyhow!("Apify API error ({}): {}", status, text));
     }
 
-    let data: SupadataTranscriptResponse = response.json().await?;
+    let data: Vec<ApifyVideoResponse> = response.json().await?;
+    let video = data.into_iter().next()
+        .ok_or_else(|| anyhow!("No video data returned from Apify"))?;
 
-    // Check if returned language matches requested language
-    if !lang.is_empty() {
-        if let Some(returned_lang) = &data.lang {
-            let lang_matches = match lang {
-                "zh" => returned_lang.starts_with("zh"),
-                "en" => returned_lang.starts_with("en"),
-                _ => returned_lang.starts_with(lang),
-            };
-            if !lang_matches {
-                return Err(anyhow!("Requested {} subtitles but got {}", lang, returned_lang));
-            }
-        }
-    }
+    let subtitles_list = video.subtitles
+        .ok_or_else(|| anyhow!("No subtitles returned from Apify"))?;
 
-    let segments = data.content.unwrap_or_default();
-    if segments.is_empty() {
-        return Err(anyhow!("No subtitles found for language: {}", lang));
-    }
+    // Find matching language subtitle or first available
+    let subtitle = subtitles_list.into_iter()
+        .find(|s| s.language.as_deref() == Some(lang))
+        .ok_or_else(|| anyhow!("No {} subtitles found", lang))?;
 
-    // Check if timestamps are in milliseconds by looking at the max offset
-    // If max offset > 3600 (1 hour in seconds), it's likely milliseconds
-    let max_offset = segments.iter().map(|s| s.offset).fold(0.0f64, f64::max);
-    let is_milliseconds = max_offset > 3600.0;
-    let divisor = if is_milliseconds { 1000.0 } else { 1.0 };
+    let vtt_content = subtitle.vtt
+        .ok_or_else(|| anyhow!("Subtitle VTT content is empty"))?;
 
-    let subtitles: Vec<Subtitle> = segments
-        .into_iter()
-        .enumerate()
-        .map(|(index, seg)| {
-            let start = seg.offset / divisor;
-            let duration = seg.duration / divisor;
-            Subtitle {
-                index,
-                start,
-                end: start + duration,
-                text: seg.text,
-                translation: None,
-            }
-        })
-        .collect();
-
-    Ok(subtitles)
+    parse_vtt(&vtt_content)
 }
 
 // ============ yt-dlp Fallback ============
@@ -373,14 +408,114 @@ fn parse_timestamp(ts: &str) -> Result<f64> {
 
 // ============ Public API ============
 
-/// Fetch video info using yt-dlp
-pub async fn fetch_video_info(video_id: &str) -> Result<VideoInfo> {
-    fetch_video_info_ytdlp(video_id).await
+/// Fetch video info: try yt-dlp with timeout, fallback to Apify with rate limiting
+pub async fn fetch_video_info(video_id: &str, user_id: Option<&str>) -> Result<VideoInfo> {
+    let user = user_id.unwrap_or("anonymous");
+
+    // Try yt-dlp with timeout
+    let ytdlp_result = tokio::time::timeout(
+        std::time::Duration::from_secs(YTDLP_TIMEOUT_SECS),
+        fetch_video_info_ytdlp(video_id),
+    )
+    .await;
+
+    match ytdlp_result {
+        Ok(Ok(info)) => {
+            tracing::info!("Got video info from yt-dlp for: {}", video_id);
+            return Ok(info);
+        }
+        Ok(Err(e)) => {
+            tracing::warn!("yt-dlp failed for {}: {}", video_id, e);
+        }
+        Err(_) => {
+            tracing::warn!("yt-dlp timeout ({}s) for {}", YTDLP_TIMEOUT_SECS, video_id);
+        }
+    }
+
+    // Check Apify rate limit
+    if !check_apify_rate_limit(user) {
+        let remaining = get_apify_remaining(user);
+        return Err(anyhow!(
+            "Apify daily limit reached ({}/{} used). Please try again tomorrow.",
+            APIFY_DAILY_LIMIT - remaining,
+            APIFY_DAILY_LIMIT
+        ));
+    }
+
+    // Fallback to Apify
+    tracing::info!("Falling back to Apify for: {} (user: {})", video_id, user);
+    match fetch_video_info_apify(video_id).await {
+        Ok(info) => {
+            increment_apify_usage(user);
+            let remaining = get_apify_remaining(user);
+            tracing::info!(
+                "Got video info from Apify for: {} (user: {}, remaining: {})",
+                video_id,
+                user,
+                remaining
+            );
+            Ok(info)
+        }
+        Err(e) => {
+            tracing::error!("Apify also failed for {}: {}", video_id, e);
+            Err(anyhow!("Failed to fetch video info: {}", e))
+        }
+    }
 }
 
-/// Fetch subtitles using yt-dlp
-pub async fn fetch_subtitles(video_id: &str, lang: &str) -> Result<Vec<Subtitle>> {
-    fetch_subtitles_ytdlp(video_id, lang).await
+/// Fetch subtitles: try yt-dlp with timeout, fallback to Apify with rate limiting
+pub async fn fetch_subtitles(video_id: &str, lang: &str, user_id: Option<&str>) -> Result<Vec<Subtitle>> {
+    let user = user_id.unwrap_or("anonymous");
+
+    // Try yt-dlp with timeout
+    let ytdlp_result = tokio::time::timeout(
+        std::time::Duration::from_secs(YTDLP_TIMEOUT_SECS),
+        fetch_subtitles_ytdlp(video_id, lang),
+    )
+    .await;
+
+    match ytdlp_result {
+        Ok(Ok(subs)) => {
+            tracing::info!("Got subtitles from yt-dlp for: {} (lang: {})", video_id, lang);
+            return Ok(subs);
+        }
+        Ok(Err(e)) => {
+            tracing::warn!("yt-dlp subtitles failed for {}: {}", video_id, e);
+        }
+        Err(_) => {
+            tracing::warn!("yt-dlp subtitles timeout ({}s) for {}", YTDLP_TIMEOUT_SECS, video_id);
+        }
+    }
+
+    // Check Apify rate limit
+    if !check_apify_rate_limit(user) {
+        let remaining = get_apify_remaining(user);
+        return Err(anyhow!(
+            "Apify daily limit reached ({}/{} used). Please try again tomorrow.",
+            APIFY_DAILY_LIMIT - remaining,
+            APIFY_DAILY_LIMIT
+        ));
+    }
+
+    // Fallback to Apify
+    tracing::info!("Falling back to Apify subtitles for: {} (user: {})", video_id, user);
+    match fetch_subtitles_apify(video_id, lang).await {
+        Ok(subs) => {
+            increment_apify_usage(user);
+            let remaining = get_apify_remaining(user);
+            tracing::info!(
+                "Got subtitles from Apify for: {} (user: {}, remaining: {})",
+                video_id,
+                user,
+                remaining
+            );
+            Ok(subs)
+        }
+        Err(e) => {
+            tracing::error!("Apify subtitles also failed for {}: {}", video_id, e);
+            Err(anyhow!("Failed to fetch subtitles: {}", e))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -402,5 +537,74 @@ mod tests {
     #[test]
     fn test_parse_timestamp() {
         assert!((parse_timestamp("00:01:30.500").unwrap() - 90.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_parse_duration_string() {
+        // Test HH:MM:SS format
+        assert!((parse_duration_string("00:03:33") - 213.0).abs() < 0.001);
+        assert!((parse_duration_string("01:30:00") - 5400.0).abs() < 0.001);
+        // Test MM:SS format
+        assert!((parse_duration_string("03:33") - 213.0).abs() < 0.001);
+        // Test edge cases
+        assert!((parse_duration_string("00:00:00") - 0.0).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn test_apify_video_info() {
+        if std::env::var("APIFY_API_TOKEN").is_err() {
+            println!("Skipping Apify test: APIFY_API_TOKEN not set");
+            return;
+        }
+
+        let result = fetch_video_info_apify("dQw4w9WgXcQ").await;
+        assert!(result.is_ok(), "Apify video info failed: {:?}", result.err());
+
+        let info = result.unwrap();
+        assert_eq!(info.video_id, "dQw4w9WgXcQ");
+        assert!(info.title.contains("Rick Astley") || info.title.contains("Never Gonna"));
+        assert!(info.duration > 200.0); // Should be ~213 seconds
+    }
+
+    #[tokio::test]
+    async fn test_apify_subtitles() {
+        if std::env::var("APIFY_API_TOKEN").is_err() {
+            println!("Skipping Apify test: APIFY_API_TOKEN not set");
+            return;
+        }
+
+        let result = fetch_subtitles_apify("dQw4w9WgXcQ", "en").await;
+        assert!(result.is_ok(), "Apify subtitles failed: {:?}", result.err());
+
+        let subs = result.unwrap();
+        assert!(!subs.is_empty(), "Should have subtitles");
+        // Check first subtitle has valid data
+        assert!(!subs[0].text.is_empty());
+        assert!(subs[0].start >= 0.0);
+    }
+
+    #[test]
+    fn test_apify_rate_limit() {
+        let test_user = "test_rate_limit_user_12345";
+
+        // Clear any existing usage
+        {
+            let mut usage = APIFY_USAGE.lock().unwrap();
+            usage.clear();
+        }
+
+        // Initially should have full quota
+        assert_eq!(get_apify_remaining(test_user), APIFY_DAILY_LIMIT);
+        assert!(check_apify_rate_limit(test_user));
+
+        // Use up the quota
+        for _ in 0..APIFY_DAILY_LIMIT {
+            assert!(check_apify_rate_limit(test_user));
+            increment_apify_usage(test_user);
+        }
+
+        // Should be at limit now
+        assert_eq!(get_apify_remaining(test_user), 0);
+        assert!(!check_apify_rate_limit(test_user));
     }
 }

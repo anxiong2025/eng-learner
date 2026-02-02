@@ -379,6 +379,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "jsonwebtoken",
+ "once_cell",
  "regex",
  "reqwest",
  "serde",
