@@ -225,6 +225,7 @@ async fn fetch_video_info_ytdlp(video_id: &str) -> Result<VideoInfo> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::error!("yt-dlp error: {}", stderr);
         // Check for common cloud deployment issues
         if stderr.contains("Sign in to confirm") || stderr.contains("bot") {
             return Err(anyhow!("This video requires verification. Please try a different video or try again later."));
