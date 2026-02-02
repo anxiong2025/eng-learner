@@ -11,8 +11,11 @@ use tokio::process::Command;
 
 // ============ Apify Rate Limiting ============
 
-/// Max Apify calls per user per day
-const APIFY_DAILY_LIMIT: u32 = 2;
+/// Default Apify calls per user per day
+const APIFY_DAILY_LIMIT_DEFAULT: u32 = 2;
+
+/// Bonus Apify calls for users who have invited friends
+const APIFY_DAILY_LIMIT_INVITED: u32 = 3;
 
 /// yt-dlp timeout before falling back to Apify (seconds)
 const YTDLP_TIMEOUT_SECS: u64 = 15;
@@ -26,11 +29,19 @@ fn get_apify_usage_key(user_id: &str) -> (String, i32, u32) {
     (user_id.to_string(), now.year(), now.ordinal())
 }
 
-fn check_apify_rate_limit(user_id: &str) -> bool {
+fn get_apify_limit(has_invited: bool) -> u32 {
+    if has_invited {
+        APIFY_DAILY_LIMIT_INVITED
+    } else {
+        APIFY_DAILY_LIMIT_DEFAULT
+    }
+}
+
+fn check_apify_rate_limit(user_id: &str, has_invited: bool) -> bool {
     let key = get_apify_usage_key(user_id);
     let usage = APIFY_USAGE.lock().unwrap();
     let count = usage.get(&key).copied().unwrap_or(0);
-    count < APIFY_DAILY_LIMIT
+    count < get_apify_limit(has_invited)
 }
 
 fn increment_apify_usage(user_id: &str) {
@@ -45,11 +56,11 @@ fn increment_apify_usage(user_id: &str) {
     *usage.entry(key).or_insert(0) += 1;
 }
 
-fn get_apify_remaining(user_id: &str) -> u32 {
+fn get_apify_remaining(user_id: &str, has_invited: bool) -> u32 {
     let key = get_apify_usage_key(user_id);
     let usage = APIFY_USAGE.lock().unwrap();
     let count = usage.get(&key).copied().unwrap_or(0);
-    APIFY_DAILY_LIMIT.saturating_sub(count)
+    get_apify_limit(has_invited).saturating_sub(count)
 }
 
 /// Extract video ID from YouTube URL
@@ -409,7 +420,9 @@ fn parse_timestamp(ts: &str) -> Result<f64> {
 // ============ Public API ============
 
 /// Fetch video info: try yt-dlp with timeout, fallback to Apify with rate limiting
-pub async fn fetch_video_info(video_id: &str, user_id: Option<&str>) -> Result<VideoInfo> {
+/// - user_id: for rate limiting tracking
+/// - has_invited: if true, user gets 3 Apify calls/day instead of 2
+pub async fn fetch_video_info(video_id: &str, user_id: Option<&str>, has_invited: bool) -> Result<VideoInfo> {
     let user = user_id.unwrap_or("anonymous");
 
     // Try yt-dlp with timeout
@@ -433,26 +446,28 @@ pub async fn fetch_video_info(video_id: &str, user_id: Option<&str>) -> Result<V
     }
 
     // Check Apify rate limit
-    if !check_apify_rate_limit(user) {
-        let remaining = get_apify_remaining(user);
+    let limit = get_apify_limit(has_invited);
+    if !check_apify_rate_limit(user, has_invited) {
+        let remaining = get_apify_remaining(user, has_invited);
         return Err(anyhow!(
-            "Apify daily limit reached ({}/{} used). Please try again tomorrow.",
-            APIFY_DAILY_LIMIT - remaining,
-            APIFY_DAILY_LIMIT
+            "Apify daily limit reached ({}/{} used). Please try again tomorrow or invite friends for more quota.",
+            limit - remaining,
+            limit
         ));
     }
 
     // Fallback to Apify
-    tracing::info!("Falling back to Apify for: {} (user: {})", video_id, user);
+    tracing::info!("Falling back to Apify for: {} (user: {}, has_invited: {})", video_id, user, has_invited);
     match fetch_video_info_apify(video_id).await {
         Ok(info) => {
             increment_apify_usage(user);
-            let remaining = get_apify_remaining(user);
+            let remaining = get_apify_remaining(user, has_invited);
             tracing::info!(
-                "Got video info from Apify for: {} (user: {}, remaining: {})",
+                "Got video info from Apify for: {} (user: {}, remaining: {}/{})",
                 video_id,
                 user,
-                remaining
+                remaining,
+                limit
             );
             Ok(info)
         }
@@ -464,7 +479,9 @@ pub async fn fetch_video_info(video_id: &str, user_id: Option<&str>) -> Result<V
 }
 
 /// Fetch subtitles: try yt-dlp with timeout, fallback to Apify with rate limiting
-pub async fn fetch_subtitles(video_id: &str, lang: &str, user_id: Option<&str>) -> Result<Vec<Subtitle>> {
+/// - user_id: for rate limiting tracking
+/// - has_invited: if true, user gets 3 Apify calls/day instead of 2
+pub async fn fetch_subtitles(video_id: &str, lang: &str, user_id: Option<&str>, has_invited: bool) -> Result<Vec<Subtitle>> {
     let user = user_id.unwrap_or("anonymous");
 
     // Try yt-dlp with timeout
@@ -488,26 +505,28 @@ pub async fn fetch_subtitles(video_id: &str, lang: &str, user_id: Option<&str>) 
     }
 
     // Check Apify rate limit
-    if !check_apify_rate_limit(user) {
-        let remaining = get_apify_remaining(user);
+    let limit = get_apify_limit(has_invited);
+    if !check_apify_rate_limit(user, has_invited) {
+        let remaining = get_apify_remaining(user, has_invited);
         return Err(anyhow!(
-            "Apify daily limit reached ({}/{} used). Please try again tomorrow.",
-            APIFY_DAILY_LIMIT - remaining,
-            APIFY_DAILY_LIMIT
+            "Apify daily limit reached ({}/{} used). Please try again tomorrow or invite friends for more quota.",
+            limit - remaining,
+            limit
         ));
     }
 
     // Fallback to Apify
-    tracing::info!("Falling back to Apify subtitles for: {} (user: {})", video_id, user);
+    tracing::info!("Falling back to Apify subtitles for: {} (user: {}, has_invited: {})", video_id, user, has_invited);
     match fetch_subtitles_apify(video_id, lang).await {
         Ok(subs) => {
             increment_apify_usage(user);
-            let remaining = get_apify_remaining(user);
+            let remaining = get_apify_remaining(user, has_invited);
             tracing::info!(
-                "Got subtitles from Apify for: {} (user: {}, remaining: {})",
+                "Got subtitles from Apify for: {} (user: {}, remaining: {}/{})",
                 video_id,
                 user,
-                remaining
+                remaining,
+                limit
             );
             Ok(subs)
         }
@@ -585,26 +604,43 @@ mod tests {
 
     #[test]
     fn test_apify_rate_limit() {
-        let test_user = "test_rate_limit_user_12345";
+        // Use unique user ID to avoid conflicts with other tests
+        let test_user = "test_normal_user_unique_12345";
+        let has_invited = false;
 
-        // Clear any existing usage
-        {
-            let mut usage = APIFY_USAGE.lock().unwrap();
-            usage.clear();
-        }
-
-        // Initially should have full quota
-        assert_eq!(get_apify_remaining(test_user), APIFY_DAILY_LIMIT);
-        assert!(check_apify_rate_limit(test_user));
+        // Initially should have full quota (2 for non-invited users)
+        assert_eq!(get_apify_remaining(test_user, has_invited), APIFY_DAILY_LIMIT_DEFAULT);
+        assert!(check_apify_rate_limit(test_user, has_invited));
 
         // Use up the quota
-        for _ in 0..APIFY_DAILY_LIMIT {
-            assert!(check_apify_rate_limit(test_user));
+        for _ in 0..APIFY_DAILY_LIMIT_DEFAULT {
+            assert!(check_apify_rate_limit(test_user, has_invited));
             increment_apify_usage(test_user);
         }
 
         // Should be at limit now
-        assert_eq!(get_apify_remaining(test_user), 0);
-        assert!(!check_apify_rate_limit(test_user));
+        assert_eq!(get_apify_remaining(test_user, has_invited), 0);
+        assert!(!check_apify_rate_limit(test_user, has_invited));
+    }
+
+    #[test]
+    fn test_apify_rate_limit_with_invite() {
+        // Use a unique user ID to avoid conflicts with other tests
+        let test_user = "test_invited_user_unique_67890";
+        let has_invited = true;
+
+        // Invited users should have 3 quota
+        assert_eq!(get_apify_remaining(test_user, has_invited), APIFY_DAILY_LIMIT_INVITED);
+        assert!(check_apify_rate_limit(test_user, has_invited));
+
+        // Use up the quota
+        for _ in 0..APIFY_DAILY_LIMIT_INVITED {
+            assert!(check_apify_rate_limit(test_user, has_invited));
+            increment_apify_usage(test_user);
+        }
+
+        // Should be at limit now
+        assert_eq!(get_apify_remaining(test_user, has_invited), 0);
+        assert!(!check_apify_rate_limit(test_user, has_invited));
     }
 }

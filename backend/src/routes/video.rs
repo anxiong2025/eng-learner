@@ -97,7 +97,12 @@ async fn parse_video(
 
     // Fetch video info (pass user_id for Apify rate limiting)
     let user_id_opt = if is_logged_in { Some(user_id) } else { None };
-    match youtube::fetch_video_info(&video_id, user_id_opt).await {
+    let has_invited = if is_logged_in {
+        db::get_bonus_quota(&pool, user_id).await.unwrap_or(0) > 0
+    } else {
+        false
+    };
+    match youtube::fetch_video_info(&video_id, user_id_opt, has_invited).await {
         Ok(info) => {
             // Increment usage count on success (skip for demo video)
             if !is_demo {
@@ -121,17 +126,24 @@ async fn parse_video(
 }
 
 async fn get_subtitles(
+    State(pool): State<DbPool>,
     auth: OptionalAuthUser,
     Path(video_id): Path<String>,
     Query(query): Query<SubtitleQuery>,
 ) -> Json<ApiResponse<SubtitleResponse>> {
     let lang = query.lang.unwrap_or_else(|| "en".to_string());
     let user_id = auth.user_id_or_default();
-    let user_id_opt = if user_id != "default" { Some(user_id) } else { None };
+    let is_logged_in = user_id != "default";
+    let user_id_opt = if is_logged_in { Some(user_id) } else { None };
+    let has_invited = if is_logged_in {
+        db::get_bonus_quota(&pool, user_id).await.unwrap_or(0) > 0
+    } else {
+        false
+    };
 
     // Try to fetch subtitles in requested language from YouTube
     // Note: For Chinese, if YouTube doesn't have it, frontend will use on-demand AI translation
-    match youtube::fetch_subtitles(&video_id, &lang, user_id_opt).await {
+    match youtube::fetch_subtitles(&video_id, &lang, user_id_opt, has_invited).await {
         Ok(subtitles) => Json(ApiResponse::success(SubtitleResponse {
             video_id,
             subtitles,
