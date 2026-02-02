@@ -209,7 +209,10 @@ async fn fetch_video_info_ytdlp(video_id: &str) -> Result<VideoInfo> {
     }
     let proxy = get_proxy();
     if let Some(ref p) = proxy {
+        tracing::info!("Using proxy for yt-dlp: {}:***", p.split('@').last().unwrap_or("unknown"));
         args.extend(["--proxy", p.as_str()]);
+    } else {
+        tracing::warn!("No YTDLP_PROXY environment variable set");
     }
     args.push(&url);
 
