@@ -18,7 +18,8 @@ const APIFY_DAILY_LIMIT_DEFAULT: u32 = 2;
 const APIFY_DAILY_LIMIT_INVITED: u32 = 3;
 
 /// yt-dlp timeout before falling back to Apify (seconds)
-const YTDLP_TIMEOUT_SECS: u64 = 15;
+/// Keep short for better UX - if yt-dlp doesn't respond quickly, fallback to Apify
+const YTDLP_TIMEOUT_SECS: u64 = 6;
 
 /// (user_id, year, day_of_year) -> usage count
 static APIFY_USAGE: Lazy<Mutex<HashMap<(String, i32, u32), u32>>> =
@@ -229,7 +230,109 @@ async fn fetch_subtitles_apify(video_id: &str, lang: &str) -> Result<Vec<Subtitl
     parse_vtt(&vtt_content)
 }
 
-// ============ yt-dlp Fallback ============
+// ============ Supadata API (Final Fallback) ============
+
+#[derive(Debug, Deserialize)]
+struct SupadataVideoResponse {
+    title: Option<String>,
+    duration: Option<f64>,
+    thumbnail: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SupadataTranscriptResponse {
+    content: Option<Vec<SupadataSegment>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SupadataSegment {
+    text: String,
+    offset: f64,
+    duration: f64,
+}
+
+fn get_supadata_api_key() -> Option<String> {
+    std::env::var("SUPADATA_API_KEY").ok()
+}
+
+async fn fetch_video_info_supadata(video_id: &str) -> Result<VideoInfo> {
+    let api_key = get_supadata_api_key()
+        .ok_or_else(|| anyhow!("SUPADATA_API_KEY not configured"))?;
+
+    let client = reqwest::Client::new();
+    let url = format!("https://api.supadata.ai/v1/youtube/video?id={}", video_id);
+
+    tracing::info!("Fetching video info from Supadata for: {}", video_id);
+
+    let response = client
+        .get(&url)
+        .header("x-api-key", &api_key)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(anyhow!("Supadata API error ({}): {}", status, text));
+    }
+
+    let data: SupadataVideoResponse = response.json().await?;
+
+    Ok(VideoInfo {
+        video_id: video_id.to_string(),
+        title: data.title.unwrap_or_else(|| "Unknown".to_string()),
+        duration: data.duration.unwrap_or(0.0),
+        thumbnail: data.thumbnail.unwrap_or_else(|| {
+            format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", video_id)
+        }),
+    })
+}
+
+async fn fetch_subtitles_supadata(video_id: &str, lang: &str) -> Result<Vec<Subtitle>> {
+    let api_key = get_supadata_api_key()
+        .ok_or_else(|| anyhow!("SUPADATA_API_KEY not configured"))?;
+
+    let client = reqwest::Client::new();
+    let url = format!(
+        "https://api.supadata.ai/v1/youtube/transcript?videoId={}&lang={}",
+        video_id, lang
+    );
+
+    tracing::info!("Fetching subtitles from Supadata for: {} (lang: {})", video_id, lang);
+
+    let response = client
+        .get(&url)
+        .header("x-api-key", &api_key)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(anyhow!("Supadata API error ({}): {}", status, text));
+    }
+
+    let data: SupadataTranscriptResponse = response.json().await?;
+    let segments = data.content.ok_or_else(|| anyhow!("No transcript content"))?;
+
+    let subtitles: Vec<Subtitle> = segments
+        .into_iter()
+        .enumerate()
+        .map(|(i, seg)| Subtitle {
+            index: i,
+            start: seg.offset / 1000.0, // Convert ms to seconds
+            end: (seg.offset + seg.duration) / 1000.0,
+            text: seg.text,
+            translation: None,
+        })
+        .collect();
+
+    Ok(subtitles)
+}
+
+// ============ yt-dlp ============
 
 fn get_cookies_path() -> Option<String> {
     let home = std::env::var("HOME").ok()?;
@@ -241,6 +344,7 @@ fn get_cookies_path() -> Option<String> {
     }
 }
 
+/// Get proxy for yt-dlp from YTDLP_PROXY environment variable
 fn get_proxy() -> Option<String> {
     std::env::var("YTDLP_PROXY").ok()
 }
@@ -255,10 +359,8 @@ async fn fetch_video_info_ytdlp(video_id: &str) -> Result<VideoInfo> {
     }
     let proxy = get_proxy();
     if let Some(ref p) = proxy {
-        tracing::info!("Using proxy for yt-dlp: {}:***", p.split('@').last().unwrap_or("unknown"));
+        tracing::info!("Using proxy for yt-dlp");
         args.extend(["--proxy", p.as_str()]);
-    } else {
-        tracing::warn!("No YTDLP_PROXY environment variable set");
     }
     args.push(&url);
 
@@ -469,11 +571,23 @@ pub async fn fetch_video_info(video_id: &str, user_id: Option<&str>, has_invited
                 remaining,
                 limit
             );
+            return Ok(info);
+        }
+        Err(e) => {
+            tracing::warn!("Apify failed for {}: {}", video_id, e);
+        }
+    }
+
+    // Final fallback to Supadata
+    tracing::info!("Falling back to Supadata for: {}", video_id);
+    match fetch_video_info_supadata(video_id).await {
+        Ok(info) => {
+            tracing::info!("Got video info from Supadata for: {}", video_id);
             Ok(info)
         }
         Err(e) => {
-            tracing::error!("Apify also failed for {}: {}", video_id, e);
-            Err(anyhow!("Failed to fetch video info: {}", e))
+            tracing::error!("All sources failed for {}: {}", video_id, e);
+            Err(anyhow!("Failed to fetch video info from all sources"))
         }
     }
 }
@@ -528,11 +642,23 @@ pub async fn fetch_subtitles(video_id: &str, lang: &str, user_id: Option<&str>, 
                 remaining,
                 limit
             );
+            return Ok(subs);
+        }
+        Err(e) => {
+            tracing::warn!("Apify subtitles failed for {}: {}", video_id, e);
+        }
+    }
+
+    // Final fallback to Supadata
+    tracing::info!("Falling back to Supadata subtitles for: {} (lang: {})", video_id, lang);
+    match fetch_subtitles_supadata(video_id, lang).await {
+        Ok(subs) => {
+            tracing::info!("Got subtitles from Supadata for: {} (lang: {})", video_id, lang);
             Ok(subs)
         }
         Err(e) => {
-            tracing::error!("Apify subtitles also failed for {}: {}", video_id, e);
-            Err(anyhow!("Failed to fetch subtitles: {}", e))
+            tracing::error!("All subtitle sources failed for {}: {}", video_id, e);
+            Err(anyhow!("Failed to fetch subtitles from all sources"))
         }
     }
 }
