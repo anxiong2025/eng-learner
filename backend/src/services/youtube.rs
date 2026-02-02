@@ -202,7 +202,7 @@ fn get_proxy() -> Option<String> {
 async fn fetch_video_info_ytdlp(video_id: &str) -> Result<VideoInfo> {
     let url = format!("https://www.youtube.com/watch?v={}", video_id);
 
-    let mut args = vec!["-j", "--no-playlist"];
+    let mut args = vec!["-j", "--no-playlist", "--js-runtimes", "nodejs"];
     let cookies_path = get_cookies_path();
     if let Some(ref path) = cookies_path {
         args.extend(["--cookies", path.as_str()]);
@@ -258,6 +258,7 @@ async fn fetch_subtitles_ytdlp(video_id: &str, lang: &str) -> Result<Vec<Subtitl
         "--sub-lang", sub_lang,
         "--sub-format", "vtt",
         "--skip-download",
+        "--js-runtimes", "nodejs",
     ];
     let cookies_path = get_cookies_path();
     if let Some(ref path) = cookies_path {
