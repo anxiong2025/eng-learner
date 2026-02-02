@@ -370,39 +370,15 @@ fn parse_timestamp(ts: &str) -> Result<f64> {
     Ok(hours * 3600.0 + minutes * 60.0 + seconds)
 }
 
-// ============ Public API with Fallback ============
+// ============ Public API ============
 
-/// Fetch video info: try Supadata first, fallback to yt-dlp
+/// Fetch video info using yt-dlp
 pub async fn fetch_video_info(video_id: &str) -> Result<VideoInfo> {
-    // Try Supadata first
-    match fetch_video_info_supadata(video_id).await {
-        Ok(info) => {
-            tracing::info!("Fetched video info via Supadata");
-            return Ok(info);
-        }
-        Err(e) => {
-            tracing::warn!("Supadata failed, falling back to yt-dlp: {}", e);
-        }
-    }
-
-    // Fallback to yt-dlp
     fetch_video_info_ytdlp(video_id).await
 }
 
-/// Fetch subtitles: try Supadata first, fallback to yt-dlp
+/// Fetch subtitles using yt-dlp
 pub async fn fetch_subtitles(video_id: &str, lang: &str) -> Result<Vec<Subtitle>> {
-    // Try Supadata first
-    match fetch_subtitles_supadata(video_id, lang).await {
-        Ok(subs) => {
-            tracing::info!("Fetched subtitles via Supadata");
-            return Ok(subs);
-        }
-        Err(e) => {
-            tracing::warn!("Supadata failed, falling back to yt-dlp: {}", e);
-        }
-    }
-
-    // Fallback to yt-dlp
     fetch_subtitles_ytdlp(video_id, lang).await
 }
 
