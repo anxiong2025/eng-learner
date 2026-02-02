@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Loader2, Link2, ArrowRight, ArrowLeft, GitBranch, FileText, BookOpen, Play, Presentation, PenLine, ChevronLeft, ChevronRight, History, AlertCircle, Crown, Copy, Check, Users } from 'lucide-react';
+import { trackPageView } from './lib/firebase';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -863,7 +864,18 @@ function StatsPage() {
 // Main App Component
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuthStore();
+
+  // Track page views
+  useEffect(() => {
+    const pageName = location.pathname === '/' ? 'Home' :
+      location.pathname.startsWith('/watch/') ? 'Watch' :
+      location.pathname === '/vocabulary' ? 'Vocabulary' :
+      location.pathname === '/stats' ? 'Stats' :
+      location.pathname === '/about' ? 'About' : 'Other';
+    trackPageView(pageName);
+  }, [location.pathname]);
 
   // Store ref code from URL for invitation tracking
   useEffect(() => {
