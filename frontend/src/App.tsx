@@ -25,6 +25,8 @@ import { NotesPanel } from './components/NotesPanel';
 import { FloatingAI } from './components/FloatingAI';
 import { AuthDialog } from './components/AuthDialog';
 import { AboutPage } from './components/AboutPage';
+import { TermsPage } from './components/TermsPage';
+import { PrivacyPage } from './components/PrivacyPage';
 import { VideoPageSkeleton } from './components/ui/skeleton';
 import { useVideoStore } from './stores/videoStore';
 import { useAuthStore } from './store/authStore';
@@ -827,11 +829,11 @@ function WatchPage() {
       {/* Footer - only visible when scrolling down */}
       <footer className="py-4 border-t border-border/50">
         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <a href="/about" className="hover:text-foreground transition-colors">About Us</a>
-          <span className="text-border">•</span>
-          <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
-          <span className="text-border">•</span>
-          <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
+          <span>© 2026 Menmo</span>
+          <a href="/about" className="hover:text-foreground transition-colors">About</a>
+          <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
+          <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
+          <a href="mailto:contact@tubemo.com" className="hover:text-foreground transition-colors">Contact</a>
         </div>
       </footer>
 
@@ -945,6 +947,8 @@ function App() {
       <Route path="/vocabulary" element={<VocabularyPage />} />
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/about" element={<AboutPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
     </Routes>
   );
 }

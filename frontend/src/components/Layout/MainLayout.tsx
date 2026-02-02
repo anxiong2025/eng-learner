@@ -1,6 +1,5 @@
 import { ReactNode } from 'react';
 import { ArrowLeft, BookOpen, BarChart3, Github } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { AuthDialog } from '@/components/AuthDialog';
 
 interface MainLayoutProps {
@@ -11,7 +10,6 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children, hideHeader = false, onNavigate, currentView = 'home' }: MainLayoutProps) {
-  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -24,7 +22,6 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
               <button
                 onClick={() => onNavigate?.('home')}
                 className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
-                title="Back"
               >
                 <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
               </button>
@@ -61,12 +58,6 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
               >
                 <Github className="w-4 h-4" />
               </a>
-              <button
-                onClick={() => navigate('/about')}
-                className="px-2 h-8 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                About
-              </button>
               <AuthDialog />
             </div>
           </div>
@@ -81,11 +72,11 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
       {/* Footer */}
       <footer className="w-full py-3 mt-auto border-t border-border/50">
         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <a href="/about" className="hover:text-foreground transition-colors">About Us</a>
-          <span className="text-border">•</span>
-          <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
-          <span className="text-border">•</span>
-          <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
+          <span>© 2026 Menmo</span>
+          <a href="/about" className="hover:text-foreground transition-colors">About</a>
+          <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
+          <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
+          <a href="mailto:contact@tubemo.com" className="hover:text-foreground transition-colors">Contact</a>
         </div>
       </footer>
     </div>

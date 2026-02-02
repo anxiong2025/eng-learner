@@ -11,10 +11,9 @@ export function AboutPage() {
         <div className="flex h-14 items-center px-6">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm">Back</span>
           </button>
         </div>
       </header>
