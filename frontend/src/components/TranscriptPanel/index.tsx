@@ -106,7 +106,7 @@ export function TranscriptPanel() {
     retryTranslation
   } = useVideoStore();
 
-  const { addNote, addReply } = useNoteStore();
+  const { addNote } = useNoteStore();
 
   // Toggle for showing/hiding translations
   const [showTranslation, setShowTranslation] = useState(true);
@@ -135,18 +135,8 @@ export function TranscriptPanel() {
       english: merged.text,
       chinese: merged.translation || undefined,
       timestamp: merged.start,
+      note_text: noteComment.trim() || undefined,
     });
-
-    // If has comment, add as reply
-    if (noteComment.trim()) {
-      setTimeout(() => {
-        const notes = useNoteStore.getState().notes;
-        const lastNote = notes[notes.length - 1];
-        if (lastNote) {
-          addReply(lastNote.id, noteComment.trim());
-        }
-      }, 50);
-    }
 
     setNoteInputIndex(null);
     setNoteComment('');

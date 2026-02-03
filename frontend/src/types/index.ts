@@ -19,12 +19,6 @@ export interface SubtitleResponse {
   language: string;
 }
 
-export interface NoteReply {
-  id: string;
-  content: string;
-  created_at: string;
-}
-
 export interface Note {
   id: string;
   video_id: string;
@@ -32,9 +26,8 @@ export interface Note {
   english?: string;
   chinese?: string;
   note_text?: string;
-  images?: string[];  // Base64 encoded images
+  images?: string[];  // R2 image URLs
   created_at: string;
-  replies?: NoteReply[];
 }
 
 export interface ApiResponse<T> {

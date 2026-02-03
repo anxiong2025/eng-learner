@@ -25,7 +25,7 @@ export function SubtitleLine({
   isTranslating,
   isUnlocked = true,
 }: SubtitleLineProps) {
-  const { addNote, addReply } = useNoteStore();
+  const { addNote } = useNoteStore();
   const { videoInfo, seekTo } = useVideoStore();
   const [showInput, setShowInput] = useState(false);
   const [comment, setComment] = useState('');
@@ -46,19 +46,8 @@ export function SubtitleLine({
       english: subtitle.text,
       chinese: translation,
       timestamp: subtitle.start,
+      note_text: comment.trim() || undefined,
     });
-
-    // If has comment, add as reply (need to find the note just added)
-    if (comment.trim()) {
-      // Small delay to ensure note is added
-      setTimeout(() => {
-        const notes = useNoteStore.getState().notes;
-        const lastNote = notes[notes.length - 1];
-        if (lastNote) {
-          addReply(lastNote.id, comment.trim());
-        }
-      }, 50);
-    }
 
     setShowInput(false);
     setComment('');

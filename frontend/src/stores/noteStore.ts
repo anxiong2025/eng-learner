@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Note, NoteReply } from '../types';
+import type { Note } from '../types';
 import { getNotes, saveNote, deleteNote as deleteNoteApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
@@ -10,8 +10,6 @@ interface NoteState {
   addNote: (note: Omit<Note, 'id' | 'created_at'>) => Promise<void>;
   addQuickNote: (videoId: string, timestamp: number, text: string, images?: string[]) => Promise<void>;
   updateNote: (id: string, text: string) => void;
-  addReply: (noteId: string, content: string) => void;
-  removeReply: (noteId: string, replyId: string) => void;
   removeNote: (id: string) => Promise<void>;
   getNotesByVideo: (videoId: string) => Note[];
   clearNotes: () => void;
@@ -28,32 +26,6 @@ export const useNoteStore = create<NoteState>()(
         set((state) => ({
           notes: state.notes.map((n) =>
             n.id === id ? { ...n, note_text: text } : n
-          ),
-        }));
-      },
-
-      addReply: (noteId, content) => {
-        const reply: NoteReply = {
-          id: `reply_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-          content,
-          created_at: new Date().toISOString(),
-        };
-
-        set((state) => ({
-          notes: state.notes.map((n) =>
-            n.id === noteId
-              ? { ...n, replies: [...(n.replies || []), reply] }
-              : n
-          ),
-        }));
-      },
-
-      removeReply: (noteId, replyId) => {
-        set((state) => ({
-          notes: state.notes.map((n) =>
-            n.id === noteId
-              ? { ...n, replies: (n.replies || []).filter((r) => r.id !== replyId) }
-              : n
           ),
         }));
       },

@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { useVideoStore } from '@/stores/videoStore';
 import { useNoteStore } from '@/stores/noteStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, Play, StickyNote, Pencil, MessageSquare, Check, Eye, X } from 'lucide-react';
-import type { Note, NoteReply } from '@/types';
+import { Trash2, Play, StickyNote, Pencil, Check, Eye, X } from 'lucide-react';
+import type { Note } from '@/types';
 
 // Image preview component with click to view
 function ImagePreview({ src, alt }: { src: string; alt: string }) {
@@ -145,15 +145,11 @@ interface NoteItemProps {
   onSeek: (time: number) => void;
   onUpdate: (id: string, text: string) => void;
   onDelete: (id: string) => void;
-  onAddReply: (noteId: string, content: string) => void;
-  onDeleteReply: (noteId: string, replyId: string) => void;
 }
 
-function NoteItem({ note, onSeek, onUpdate, onDelete, onAddReply, onDeleteReply }: NoteItemProps) {
+function NoteItem({ note, onSeek, onUpdate, onDelete }: NoteItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(note.note_text || '');
-  const [isReplying, setIsReplying] = useState(false);
-  const [replyText, setReplyText] = useState('');
 
   const handleSaveEdit = () => {
     if (editText.trim()) {
@@ -167,193 +163,111 @@ function NoteItem({ note, onSeek, onUpdate, onDelete, onAddReply, onDeleteReply 
     setIsEditing(false);
   };
 
-  const handleAddReply = () => {
-    if (replyText.trim()) {
-      onAddReply(note.id, replyText.trim());
-      setReplyText('');
-      setIsReplying(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      action();
+      handleSaveEdit();
     }
     if (e.key === 'Escape') {
       setIsEditing(false);
-      setIsReplying(false);
     }
   };
 
   return (
-    <div className="space-y-1">
-      {/* Main note */}
-      <div className="group p-2 rounded-lg hover:bg-muted/40 transition-colors">
-        {/* Top row: timestamp + actions */}
-        <div className="flex items-center justify-between mb-1">
-          <button
-            onClick={() => onSeek(note.timestamp)}
-            className="flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors"
-          >
-            <Play className="w-2.5 h-2.5" />
-            <span className="font-mono">{formatTime(note.timestamp)}</span>
-          </button>
+    <div className="group p-2 rounded-lg hover:bg-muted/40 transition-colors">
+      {/* Top row: timestamp + actions */}
+      <div className="flex items-center justify-between mb-1">
+        <button
+          onClick={() => onSeek(note.timestamp)}
+          className="flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors"
+        >
+          <Play className="w-2.5 h-2.5" />
+          <span className="font-mono">{formatTime(note.timestamp)}</span>
+        </button>
 
-          {/* Action buttons - show on hover */}
-          {!isEditing && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
-                onClick={() => setIsReplying(!isReplying)}
-                title="Reply"
-              >
-                <MessageSquare className="h-3 w-3" />
-              </button>
-              <button
-                className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
-                onClick={() => {
-                  setEditText(note.note_text || note.english || '');
-                  setIsEditing(true);
-                }}
-                title="Edit"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-              <button
-                className="p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                onClick={() => onDelete(note.id)}
-                title="Delete"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Content - full width */}
-        {isEditing ? (
-          <div className="space-y-1.5">
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, handleSaveEdit)}
-              className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-              rows={2}
-              autoFocus
-            />
-            <div className="flex gap-1">
-              <button
-                className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleSaveEdit}
-              >
-                <Check className="w-2.5 h-2.5" />
-                Save
-              </button>
-              <button
-                className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded text-muted-foreground hover:bg-muted"
-                onClick={handleCancelEdit}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {note.english && (
-              <p className="text-xs text-foreground leading-relaxed">{note.english}</p>
-            )}
-            {note.chinese && (
-              <p className="text-[11px] text-muted-foreground">{note.chinese}</p>
-            )}
-            {note.note_text && (
-              <MarkdownText text={note.note_text} />
-            )}
-            {/* Display images */}
-            {note.images && note.images.length > 0 && (
-              <div className="flex gap-1.5 mt-1.5 overflow-x-auto pb-1">
-                {note.images.map((img, idx) => (
-                  <ImagePreview
-                    key={idx}
-                    src={img}
-                    alt={`Note image ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Reply input */}
-        {isReplying && (
-          <div className="mt-2 pl-3 border-l-2 border-border/50">
-            <textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, handleAddReply)}
-              placeholder="Add a note..."
-              className="w-full px-2 py-1 text-[11px] bg-background border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-              rows={1}
-              autoFocus
-            />
-            <div className="flex gap-1 mt-1">
-              <button
-                className="px-2 py-0.5 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleAddReply}
-              >
-                Add
-              </button>
-              <button
-                className="px-2 py-0.5 text-[10px] rounded text-muted-foreground hover:bg-muted"
-                onClick={() => setIsReplying(false)}
-              >
-                Cancel
-              </button>
-            </div>
+        {/* Action buttons - show on hover */}
+        {!isEditing && (
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setEditText(note.note_text || note.english || '');
+                setIsEditing(true);
+              }}
+              title="Edit"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              className="p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              onClick={() => onDelete(note.id)}
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
         )}
       </div>
 
-      {/* Replies */}
-      {note.replies && note.replies.length > 0 && (
-        <div className="ml-2 pl-3 border-l-2 border-border/30 space-y-1">
-          {note.replies.map((reply) => (
-            <ReplyItem
-              key={reply.id}
-              reply={reply}
-              onDelete={() => onDeleteReply(note.id, reply.id)}
-            />
-          ))}
+      {/* Content - full width */}
+      {isEditing ? (
+        <div className="space-y-1.5">
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+            rows={2}
+            autoFocus
+          />
+          <div className="flex gap-1">
+            <button
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={handleSaveEdit}
+            >
+              <Check className="w-2.5 h-2.5" />
+              Save
+            </button>
+            <button
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded text-muted-foreground hover:bg-muted"
+              onClick={handleCancelEdit}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {note.english && (
+            <p className="text-xs text-foreground leading-relaxed">{note.english}</p>
+          )}
+          {note.chinese && (
+            <p className="text-[11px] text-muted-foreground">{note.chinese}</p>
+          )}
+          {note.note_text && (
+            <MarkdownText text={note.note_text} />
+          )}
+          {/* Display images */}
+          {note.images && note.images.length > 0 && (
+            <div className="flex gap-1.5 mt-1.5 overflow-x-auto pb-1">
+              {note.images.map((img, idx) => (
+                <ImagePreview
+                  key={idx}
+                  src={img}
+                  alt={`Note image ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-interface ReplyItemProps {
-  reply: NoteReply;
-  onDelete: () => void;
-}
-
-function ReplyItem({ reply, onDelete }: ReplyItemProps) {
-  return (
-    <div className="group flex items-start gap-2 py-1 px-1 rounded hover:bg-muted/30 transition-colors">
-      <p className="flex-1 text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">
-        {reply.content}
-      </p>
-      <button
-        className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-all shrink-0"
-        onClick={onDelete}
-      >
-        <Trash2 className="h-2.5 w-2.5" />
-      </button>
-    </div>
-  );
-}
-
 export function NotesPanel() {
   const { videoInfo, seekTo } = useVideoStore();
-  const { notes, removeNote, updateNote, addReply, removeReply } = useNoteStore();
+  const { notes, removeNote, updateNote } = useNoteStore();
 
   const videoNotes = useMemo(() => {
     if (!videoInfo) return [];
@@ -401,8 +315,6 @@ export function NotesPanel() {
               onSeek={seekTo}
               onUpdate={updateNote}
               onDelete={removeNote}
-              onAddReply={addReply}
-              onDeleteReply={removeReply}
             />
           ))}
         </div>
