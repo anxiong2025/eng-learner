@@ -3,6 +3,58 @@ import { cn } from '@/lib/utils';
 import { ImagePlus, ArrowUp, X, Loader2 } from 'lucide-react';
 import { uploadImage } from '@/api/client';
 
+// Compress image before upload
+async function compressImage(file: File, maxWidth = 1920, quality = 0.8): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      // Calculate new dimensions
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      if (!ctx) {
+        resolve(file); // Fallback to original
+        return;
+      }
+
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            // Create new file with same name but potentially smaller size
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            // Only use compressed if it's actually smaller
+            resolve(compressedFile.size < file.size ? compressedFile : file);
+          } else {
+            resolve(file);
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 interface NoteInputProps {
   onSubmit: (content: string, images?: string[]) => void;
   placeholder?: string;
@@ -49,7 +101,7 @@ export function NoteInput({
     }
   }, [text]);
 
-  // Handle image upload (max 2 images) - upload to R2
+  // Handle image upload (max 2 images) - compress and upload to R2
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -64,7 +116,11 @@ export function NoteInput({
       for (const file of filesToProcess) {
         if (file.type.startsWith('image/')) {
           try {
-            const result = await uploadImage(file);
+            // Compress image before upload
+            const compressedFile = await compressImage(file);
+            console.log(`Image compressed: ${file.size} -> ${compressedFile.size} bytes (${Math.round((1 - compressedFile.size / file.size) * 100)}% reduction)`);
+
+            const result = await uploadImage(compressedFile);
             setImages(prev => {
               if (prev.length >= 2) return prev;
               return [...prev, result.url];
@@ -100,7 +156,7 @@ export function NoteInput({
     setImages(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Handle paste (for images) - upload to R2
+  // Handle paste (for images) - compress and upload to R2
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -112,7 +168,11 @@ export function NoteInput({
         if (file && images.length < 2) {
           setIsUploading(true);
           try {
-            const result = await uploadImage(file);
+            // Compress image before upload
+            const compressedFile = await compressImage(file);
+            console.log(`Pasted image compressed: ${file.size} -> ${compressedFile.size} bytes (${Math.round((1 - compressedFile.size / file.size) * 100)}% reduction)`);
+
+            const result = await uploadImage(compressedFile);
             setImages(prev => {
               if (prev.length >= 2) return prev;
               return [...prev, result.url];
