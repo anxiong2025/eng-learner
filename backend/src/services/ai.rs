@@ -213,6 +213,14 @@ impl GeminiProvider {
 #[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<GeminiContent>,
+    #[serde(rename = "generationConfig")]
+    generation_config: GeminiGenerationConfig,
+}
+
+#[derive(Serialize)]
+struct GeminiGenerationConfig {
+    #[serde(rename = "maxOutputTokens")]
+    max_output_tokens: u32,
 }
 
 #[derive(Serialize)]
@@ -680,6 +688,9 @@ impl GeminiProvider {
                     text: prompt.to_string(),
                 }],
             }],
+            generation_config: GeminiGenerationConfig {
+                max_output_tokens: 8192,
+            },
         };
 
         let response = self
@@ -1416,6 +1427,21 @@ fn parse_vocabulary_response(response: &str) -> Vec<VocabularyItem> {
         if let Ok(items) = serde_json::from_str::<Vec<VocabularyItem>>(mat.as_str()) {
             return items;
         }
+    }
+
+    // Try to salvage partial data from truncated JSON
+    // Find all complete JSON objects {...} and parse them individually
+    let mut items = Vec::new();
+    let obj_re = regex::Regex::new(r#"\{[^{}]*"word"\s*:\s*"[^"]+"\s*,[^{}]*\}"#).unwrap();
+    for mat in obj_re.find_iter(cleaned) {
+        if let Ok(item) = serde_json::from_str::<VocabularyItem>(mat.as_str()) {
+            items.push(item);
+        }
+    }
+
+    if !items.is_empty() {
+        tracing::info!("Salvaged {} vocabulary items from truncated response", items.len());
+        return items;
     }
 
     // Log the failed response for debugging (truncate at char boundary)
