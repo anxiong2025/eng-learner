@@ -116,6 +116,11 @@ pub async fn init_db() -> Result<DbPool> {
         )"
     ).execute(&pool).await?;
 
+    // Add images column to notes (migration)
+    sqlx::query(
+        "ALTER TABLE notes ADD COLUMN IF NOT EXISTS images TEXT"
+    ).execute(&pool).await.ok(); // Ignore error if column exists
+
     // Create index on notes
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_notes_user_video ON notes(user_id, video_id)"
@@ -649,15 +654,16 @@ pub struct Note {
     pub english: Option<String>,
     pub chinese: Option<String>,
     pub note_text: Option<String>,
+    pub images: Option<String>,  // JSON array of image URLs
     pub created_at: String,
 }
 
 pub async fn save_note(pool: &DbPool, note: &Note) -> Result<()> {
     sqlx::query(
-        "INSERT INTO notes (id, user_id, video_id, timestamp, english, chinese, note_text, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        "INSERT INTO notes (id, user_id, video_id, timestamp, english, chinese, note_text, images, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
          ON CONFLICT (id) DO UPDATE SET
-            english = $5, chinese = $6, note_text = $7"
+            english = $5, chinese = $6, note_text = $7, images = $8"
     )
     .bind(&note.id)
     .bind(&note.user_id)
@@ -666,6 +672,7 @@ pub async fn save_note(pool: &DbPool, note: &Note) -> Result<()> {
     .bind(&note.english)
     .bind(&note.chinese)
     .bind(&note.note_text)
+    .bind(&note.images)
     .execute(pool).await?;
 
     Ok(())
@@ -673,7 +680,7 @@ pub async fn save_note(pool: &DbPool, note: &Note) -> Result<()> {
 
 pub async fn get_notes(pool: &DbPool, user_id: &str) -> Result<Vec<Note>> {
     let rows = sqlx::query(
-        "SELECT id, user_id, video_id, timestamp, english, chinese, note_text,
+        "SELECT id, user_id, video_id, timestamp, english, chinese, note_text, images,
                 to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at
          FROM notes WHERE user_id = $1 ORDER BY created_at DESC"
     )
@@ -688,13 +695,14 @@ pub async fn get_notes(pool: &DbPool, user_id: &str) -> Result<Vec<Note>> {
         english: row.get("english"),
         chinese: row.get("chinese"),
         note_text: row.get("note_text"),
+        images: row.get("images"),
         created_at: row.get("created_at"),
     }).collect())
 }
 
 pub async fn get_notes_by_video(pool: &DbPool, user_id: &str, video_id: &str) -> Result<Vec<Note>> {
     let rows = sqlx::query(
-        "SELECT id, user_id, video_id, timestamp, english, chinese, note_text,
+        "SELECT id, user_id, video_id, timestamp, english, chinese, note_text, images,
                 to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at
          FROM notes WHERE user_id = $1 AND video_id = $2 ORDER BY timestamp ASC"
     )
@@ -710,6 +718,7 @@ pub async fn get_notes_by_video(pool: &DbPool, user_id: &str, video_id: &str) ->
         english: row.get("english"),
         chinese: row.get("chinese"),
         note_text: row.get("note_text"),
+        images: row.get("images"),
         created_at: row.get("created_at"),
     }).collect())
 }

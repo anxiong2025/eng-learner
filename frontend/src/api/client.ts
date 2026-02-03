@@ -406,6 +406,7 @@ export interface NoteData {
   english?: string;
   chinese?: string;
   note_text?: string;
+  images?: string[];
 }
 
 export interface NoteResponse {
@@ -415,6 +416,7 @@ export interface NoteResponse {
   english?: string;
   chinese?: string;
   note_text?: string;
+  images?: string[];
   created_at: string;
 }
 

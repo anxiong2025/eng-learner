@@ -31,11 +31,14 @@ pub struct NoteResponse {
     pub english: Option<String>,
     pub chinese: Option<String>,
     pub note_text: Option<String>,
+    pub images: Option<Vec<String>>,
     pub created_at: String,
 }
 
 impl From<Note> for NoteResponse {
     fn from(note: Note) -> Self {
+        // Parse images JSON string to Vec<String>
+        let images = note.images.and_then(|s| serde_json::from_str(&s).ok());
         NoteResponse {
             id: note.id,
             video_id: note.video_id,
@@ -43,6 +46,7 @@ impl From<Note> for NoteResponse {
             english: note.english,
             chinese: note.chinese,
             note_text: note.note_text,
+            images,
             created_at: note.created_at,
         }
     }
@@ -56,6 +60,7 @@ pub struct CreateNoteRequest {
     pub english: Option<String>,
     pub chinese: Option<String>,
     pub note_text: Option<String>,
+    pub images: Option<Vec<String>>,
 }
 
 // Get notes (optionally filtered by video_id)
@@ -105,6 +110,9 @@ async fn save_note(
         )
     });
 
+    // Convert images Vec to JSON string for storage
+    let images_json = request.images.map(|imgs| serde_json::to_string(&imgs).unwrap_or_default());
+
     let note = Note {
         id: note_id.clone(),
         user_id: user_id.to_string(),
@@ -113,6 +121,7 @@ async fn save_note(
         english: request.english,
         chinese: request.chinese,
         note_text: request.note_text,
+        images: images_json,
         created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
     };
 

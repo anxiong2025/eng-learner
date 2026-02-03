@@ -81,6 +81,7 @@ export const useNoteStore = create<NoteState>()(
               video_id: note.video_id,
               timestamp: note.timestamp,
               note_text: note.note_text,
+              images: note.images,
             });
           } catch (error) {
             console.error('Failed to sync quick note to server:', error);
@@ -110,6 +111,7 @@ export const useNoteStore = create<NoteState>()(
               english: note.english,
               chinese: note.chinese,
               note_text: note.note_text,
+              images: note.images,
             });
 
             // Update with server response (in case server modified the data)
@@ -177,6 +179,7 @@ export const useNoteStore = create<NoteState>()(
               english: n.english,
               chinese: n.chinese,
               note_text: n.note_text,
+              images: n.images,
               created_at: n.created_at,
             })),
             ...offlineNotes,
@@ -194,6 +197,7 @@ export const useNoteStore = create<NoteState>()(
                 english: note.english,
                 chinese: note.chinese,
                 note_text: note.note_text,
+                images: note.images,
               });
             } catch (error) {
               console.error('Failed to sync offline note:', error);
