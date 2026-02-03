@@ -362,7 +362,7 @@ pub async fn get_bonus_quota(pool: &DbPool, user_id: &str) -> Result<i32> {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SavedVocabulary {
-    pub id: i64,
+    pub id: i32,
     pub word: String,
     pub meaning: String,
     pub level: String,
@@ -546,7 +546,7 @@ pub async fn get_vocabulary_list(pool: &DbPool, user_id: &str, due_only: bool) -
     Ok(results)
 }
 
-pub async fn review_vocabulary(pool: &DbPool, user_id: &str, vocab_id: i64, quality: i32) -> Result<()> {
+pub async fn review_vocabulary(pool: &DbPool, user_id: &str, vocab_id: i32, quality: i32) -> Result<()> {
     let row = sqlx::query(
         "SELECT ease_factor, COALESCE(learning_step, 0) as learning_step, interval_days
          FROM user_vocabulary WHERE vocabulary_id = $1 AND user_id = $2"
@@ -616,7 +616,7 @@ pub async fn review_vocabulary(pool: &DbPool, user_id: &str, vocab_id: i64, qual
     Ok(())
 }
 
-pub async fn delete_vocabulary(pool: &DbPool, user_id: &str, vocab_id: i64) -> Result<()> {
+pub async fn delete_vocabulary(pool: &DbPool, user_id: &str, vocab_id: i32) -> Result<()> {
     sqlx::query("DELETE FROM user_vocabulary WHERE vocabulary_id = $1 AND user_id = $2")
         .bind(vocab_id)
         .bind(user_id)

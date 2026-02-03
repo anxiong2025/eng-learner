@@ -95,7 +95,7 @@ async fn list_vocabulary(
 
 #[derive(Deserialize)]
 pub struct ReviewRequest {
-    vocab_id: i64,
+    vocab_id: i32,
     quality: i32,  // 0=forgot, 1=hard, 2=good, 3=easy
 }
 
@@ -119,7 +119,7 @@ async fn review_vocabulary(
 async fn delete_vocabulary(
     State(pool): State<DbPool>,
     auth: OptionalAuthUser,
-    axum::extract::Path(id): axum::extract::Path<i64>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
 ) -> Json<ApiResponse<()>> {
     let user_id = auth.user_id_or_default();
 
@@ -151,7 +151,7 @@ async fn check_vocabulary(
 
 #[derive(Deserialize)]
 pub struct StartAIReviewRequest {
-    vocab_ids: Vec<i64>,
+    vocab_ids: Vec<i32>,
 }
 
 #[derive(Serialize)]
@@ -214,7 +214,7 @@ async fn start_ai_review(
 
 #[derive(Deserialize)]
 pub struct GenerateSingleQuestionRequest {
-    vocab_id: i64,
+    vocab_id: i32,
     word: String,
     meaning: String,
     source_sentence: Option<String>,
@@ -258,7 +258,7 @@ async fn generate_single_question(
 
 #[derive(Deserialize)]
 pub struct SubmitAnswerRequest {
-    vocab_id: i64,
+    vocab_id: i32,
     word: String,
     meaning: String,
     question: String,
