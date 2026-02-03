@@ -1,4 +1,4 @@
-# Menmo - AI YouTube 英语学习助手
+# TubeMo - AI YouTube 英语学习助手
 
 用 AI 看 YouTube 学英语，双语字幕 + 思维导图 + 智能单词本。
 
@@ -6,7 +6,7 @@
 
 ## 演示
 
-[![Menmo Demo](https://img.youtube.com/vi/45WgxMtPf3U/maxresdefault.jpg)](https://youtu.be/45WgxMtPf3U)
+[![TubeMo Demo](https://img.youtube.com/vi/45WgxMtPf3U/maxresdefault.jpg)](https://youtu.be/45WgxMtPf3U)
 
 👆 点击观看演示视频
 

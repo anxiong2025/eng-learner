@@ -1,4 +1,4 @@
-# Menmo - AI-Powered YouTube English Learning Assistant
+# TubeMo - AI-Powered YouTube English Learning Assistant
 
 Learn English by watching YouTube videos with AI-powered bilingual subtitles, mind maps, and smart vocabulary tools.
 
@@ -6,7 +6,7 @@ Learn English by watching YouTube videos with AI-powered bilingual subtitles, mi
 
 ## Demo
 
-[![Menmo Demo](https://img.youtube.com/vi/45WgxMtPf3U/maxresdefault.jpg)](https://youtu.be/45WgxMtPf3U)
+[![TubeMo Demo](https://img.youtube.com/vi/45WgxMtPf3U/maxresdefault.jpg)](https://youtu.be/45WgxMtPf3U)
 
 👆 Click to watch the demo video
 

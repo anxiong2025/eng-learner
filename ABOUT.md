@@ -1,14 +1,12 @@
-# Menmo Action AI
+# TubeMo
 
 > Learn by doing. Remember by understanding.
 
 ## The Name
 
-**Menmo** is inspired by **Mnemosyne** (Μνημοσύνη), the ancient Greek goddess of memory and mother of the nine Muses. In mythology, she was the personification of remembrance — the foundation of all learning, art, and knowledge.
+**TubeMo** combines **Tube** (from YouTube, the world's largest video platform) with **Mo** (short for Memory, Motion, and Momentum).
 
-We simplified her name to **Menmo** — easier to say, easier to remember, just like learning should be.
-
-**Action** reflects our core belief: true learning happens through doing, not passive consumption. Watch, interact, question, repeat.
+We believe the best way to learn a language is through content you actually enjoy watching. TubeMo transforms passive video watching into an active learning experience.
 
 **AI** is your intelligent companion on this journey, helping you understand context, explain nuances, and remember what matters.
 
@@ -18,24 +16,24 @@ We simplified her name to **Menmo** — easier to say, easier to remember, just 
 
 ### Interest-Driven Learning
 
-The best learning happens when you're genuinely curious. That's why Menmo lets you learn from content you actually want to watch — tech talks, startup stories, science explainers, or anything that sparks your interest.
+The best learning happens when you're genuinely curious. That's why TubeMo lets you learn from content you actually want to watch — tech talks, startup stories, science explainers, or anything that sparks your interest.
 
 ### Active Over Passive
 
-Watching videos is passive. Menmo transforms it into an active experience:
+Watching videos is passive. TubeMo transforms it into an active experience:
 - **Pause and ask** — Stop anytime to ask AI about what you just heard
 - **Highlight and save** — Build your personal vocabulary from real context
 - **Review and recall** — Spaced repetition helps you remember
 
 ### Context is Everything
 
-Words aren't learned in isolation. Menmo keeps the full context — the video, the sentence, the moment — so you remember not just what a word means, but how it's actually used.
+Words aren't learned in isolation. TubeMo keeps the full context — the video, the sentence, the moment — so you remember not just what a word means, but how it's actually used.
 
 ---
 
 ## What We Build
 
-Menmo Action AI is a YouTube-based language learning platform that combines:
+TubeMo is a YouTube-based language learning platform that combines:
 
 - **Smart Subtitles** — Bilingual captions with real-time sync
 - **AI Assistant** — Ask questions about any sentence, word, or concept
