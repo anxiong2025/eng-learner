@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useVideoStore } from '@/stores/videoStore';
 import { useNoteStore } from '@/stores/noteStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, Play, StickyNote, Pencil, Check, Eye, X } from 'lucide-react';
+import { Trash2, Play, StickyNote, Pencil, Eye, X } from 'lucide-react';
 import type { Note } from '@/types';
 
 // Image preview component with click to view
@@ -140,6 +140,126 @@ function renderInlineMarkdown(text: string): React.ReactNode {
   });
 }
 
+// Fullscreen edit modal
+interface EditModalProps {
+  note: Note;
+  editText: string;
+  setEditText: (text: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}
+
+function EditModal({ note, editText, setEditText, onSave, onCancel }: EditModalProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      // Move cursor to end
+      textareaRef.current.selectionStart = textareaRef.current.value.length;
+    }
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onCancel();
+    }
+    // Cmd/Ctrl + Enter to save
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      onSave();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-in fade-in duration-150 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className="bg-background rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Pencil className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">编辑笔记</span>
+            <span className="text-xs text-muted-foreground font-mono">
+              {formatTime(note.timestamp)}
+            </span>
+          </div>
+          <button
+            onClick={onCancel}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 p-4 overflow-auto">
+          {/* Original subtitle if exists */}
+          {(note.english || note.chinese) && (
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              {note.english && (
+                <p className="text-sm text-foreground">{note.english}</p>
+              )}
+              {note.chinese && (
+                <p className="text-xs text-muted-foreground mt-1">{note.chinese}</p>
+              )}
+            </div>
+          )}
+
+          {/* Edit textarea */}
+          <textarea
+            ref={textareaRef}
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="写下你的笔记..."
+            className="w-full h-64 px-3 py-2 text-sm bg-background border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+
+          {/* Images if any */}
+          {note.images && note.images.length > 0 && (
+            <div className="flex gap-2 mt-3">
+              {note.images.map((img, idx) => (
+                <img
+                  key={idx}
+                  src={img}
+                  alt={`Note image ${idx + 1}`}
+                  className="h-20 w-auto rounded-md object-cover border border-border"
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/30">
+          <span className="text-xs text-muted-foreground">
+            ⌘/Ctrl + Enter 保存 · Esc 取消
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onCancel}
+              className="px-3 py-1.5 text-sm rounded-md text-muted-foreground hover:bg-muted transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={onSave}
+              className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface NoteItemProps {
   note: Note;
   onSeek: (time: number) => void;
@@ -152,9 +272,7 @@ function NoteItem({ note, onSeek, onUpdate, onDelete }: NoteItemProps) {
   const [editText, setEditText] = useState(note.note_text || '');
 
   const handleSaveEdit = () => {
-    if (editText.trim()) {
-      onUpdate(note.id, editText.trim());
-    }
+    onUpdate(note.id, editText.trim());
     setIsEditing(false);
   };
 
@@ -163,80 +281,44 @@ function NoteItem({ note, onSeek, onUpdate, onDelete }: NoteItemProps) {
     setIsEditing(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSaveEdit();
-    }
-    if (e.key === 'Escape') {
-      setIsEditing(false);
-    }
+  const handleStartEdit = () => {
+    setEditText(note.note_text || note.english || '');
+    setIsEditing(true);
   };
 
   return (
-    <div className="group p-2 rounded-lg hover:bg-muted/40 transition-colors">
-      {/* Top row: timestamp + actions */}
-      <div className="flex items-center justify-between mb-1">
-        <button
-          onClick={() => onSeek(note.timestamp)}
-          className="flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors"
-        >
-          <Play className="w-2.5 h-2.5" />
-          <span className="font-mono">{formatTime(note.timestamp)}</span>
-        </button>
+    <>
+      <div className="group p-2 rounded-lg hover:bg-muted/40 transition-colors">
+        {/* Top row: timestamp + actions */}
+        <div className="flex items-center justify-between mb-1">
+          <button
+            onClick={() => onSeek(note.timestamp)}
+            className="flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors"
+          >
+            <Play className="w-2.5 h-2.5" />
+            <span className="font-mono">{formatTime(note.timestamp)}</span>
+          </button>
 
-        {/* Action buttons - show on hover */}
-        {!isEditing && (
+          {/* Action buttons - show on hover */}
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
-              onClick={() => {
-                setEditText(note.note_text || note.english || '');
-                setIsEditing(true);
-              }}
-              title="Edit"
+              onClick={handleStartEdit}
+              title="编辑"
             >
               <Pencil className="h-3 w-3" />
             </button>
             <button
               className="p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
               onClick={() => onDelete(note.id)}
-              title="Delete"
+              title="删除"
             >
               <Trash2 className="h-3 w-3" />
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Content - full width */}
-      {isEditing ? (
-        <div className="space-y-1.5">
-          <textarea
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-            rows={2}
-            autoFocus
-          />
-          <div className="flex gap-1">
-            <button
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={handleSaveEdit}
-            >
-              <Check className="w-2.5 h-2.5" />
-              Save
-            </button>
-            <button
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded text-muted-foreground hover:bg-muted"
-              onClick={handleCancelEdit}
-            >
-              Cancel
-            </button>
-          </div>
         </div>
-      ) : (
+
+        {/* Content - full width */}
         <div className="space-y-1">
           {note.english && (
             <p className="text-xs text-foreground leading-relaxed">{note.english}</p>
@@ -260,8 +342,19 @@ function NoteItem({ note, onSeek, onUpdate, onDelete }: NoteItemProps) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Edit Modal */}
+      {isEditing && (
+        <EditModal
+          note={note}
+          editText={editText}
+          setEditText={setEditText}
+          onSave={handleSaveEdit}
+          onCancel={handleCancelEdit}
+        />
       )}
-    </div>
+    </>
   );
 }
 
