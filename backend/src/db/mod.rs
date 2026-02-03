@@ -109,7 +109,7 @@ pub async fn init_db() -> Result<DbPool> {
             user_id TEXT NOT NULL,
             video_id TEXT NOT NULL,
             timestamp REAL NOT NULL,
-            english TEXT NOT NULL,
+            english TEXT,
             chinese TEXT,
             note_text TEXT,
             created_at TIMESTAMPTZ DEFAULT NOW()
@@ -120,6 +120,11 @@ pub async fn init_db() -> Result<DbPool> {
     sqlx::query(
         "ALTER TABLE notes ADD COLUMN IF NOT EXISTS images TEXT"
     ).execute(&pool).await.ok(); // Ignore error if column exists
+
+    // Make english column nullable (migration)
+    sqlx::query(
+        "ALTER TABLE notes ALTER COLUMN english DROP NOT NULL"
+    ).execute(&pool).await.ok(); // Ignore error if already nullable
 
     // Create index on notes
     sqlx::query(
