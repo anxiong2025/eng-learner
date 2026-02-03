@@ -28,7 +28,7 @@ pub struct NoteResponse {
     pub id: String,
     pub video_id: String,
     pub timestamp: f64,
-    pub english: String,
+    pub english: Option<String>,
     pub chinese: Option<String>,
     pub note_text: Option<String>,
     pub created_at: String,
@@ -53,7 +53,7 @@ pub struct CreateNoteRequest {
     pub id: Option<String>,
     pub video_id: String,
     pub timestamp: f64,
-    pub english: String,
+    pub english: Option<String>,
     pub chinese: Option<String>,
     pub note_text: Option<String>,
 }

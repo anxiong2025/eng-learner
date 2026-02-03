@@ -646,7 +646,7 @@ pub struct Note {
     pub user_id: String,
     pub video_id: String,
     pub timestamp: f64,
-    pub english: String,
+    pub english: Option<String>,
     pub chinese: Option<String>,
     pub note_text: Option<String>,
     pub created_at: String,
