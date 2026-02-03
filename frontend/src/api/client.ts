@@ -539,4 +539,24 @@ export async function parseVideoWithUsage(url: string): Promise<ParseVideoResult
   return { videoInfo, usage };
 }
 
+// Image Upload API
+export interface UploadResponse {
+  url: string;
+  key: string;
+}
+
+export async function uploadImage(file: File): Promise<UploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await api.post<UploadResponse>('/upload/image', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 60000, // 1 minute for upload
+  });
+
+  return response.data;
+}
+
 export default api;

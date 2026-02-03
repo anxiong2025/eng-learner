@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { ImagePlus, ArrowUp, X } from 'lucide-react';
+import { ImagePlus, ArrowUp, X, Loader2 } from 'lucide-react';
+import { uploadImage } from '@/api/client';
 
 interface NoteInputProps {
   onSubmit: (content: string, images?: string[]) => void;
@@ -19,6 +20,7 @@ export function NoteInput({
 }: NoteInputProps) {
   const [text, setText] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,8 +49,8 @@ export function NoteInput({
     }
   }, [text]);
 
-  // Handle image upload (max 2 images)
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image upload (max 2 images) - upload to R2
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
@@ -57,20 +59,35 @@ export function NoteInput({
 
     const filesToProcess = Array.from(files).slice(0, remainingSlots);
 
-    filesToProcess.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
+    setIsUploading(true);
+    try {
+      for (const file of filesToProcess) {
+        if (file.type.startsWith('image/')) {
+          try {
+            const result = await uploadImage(file);
             setImages(prev => {
               if (prev.length >= 2) return prev;
-              return [...prev, event.target!.result as string];
+              return [...prev, result.url];
             });
+          } catch (error) {
+            console.error('Failed to upload image:', error);
+            // Fallback to base64 if upload fails
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              if (event.target?.result) {
+                setImages(prev => {
+                  if (prev.length >= 2) return prev;
+                  return [...prev, event.target!.result as string];
+                });
+              }
+            };
+            reader.readAsDataURL(file);
           }
-        };
-        reader.readAsDataURL(file);
+        }
       }
-    });
+    } finally {
+      setIsUploading(false);
+    }
 
     // Reset file input
     if (fileInputRef.current) {
@@ -83,8 +100,8 @@ export function NoteInput({
     setImages(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Handle paste (for images)
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+  // Handle paste (for images) - upload to R2
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -93,16 +110,29 @@ export function NoteInput({
         e.preventDefault();
         const file = item.getAsFile();
         if (file && images.length < 2) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            if (event.target?.result) {
-              setImages(prev => {
-                if (prev.length >= 2) return prev;
-                return [...prev, event.target!.result as string];
-              });
-            }
-          };
-          reader.readAsDataURL(file);
+          setIsUploading(true);
+          try {
+            const result = await uploadImage(file);
+            setImages(prev => {
+              if (prev.length >= 2) return prev;
+              return [...prev, result.url];
+            });
+          } catch (error) {
+            console.error('Failed to upload pasted image:', error);
+            // Fallback to base64
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              if (event.target?.result) {
+                setImages(prev => {
+                  if (prev.length >= 2) return prev;
+                  return [...prev, event.target!.result as string];
+                });
+              }
+            };
+            reader.readAsDataURL(file);
+          } finally {
+            setIsUploading(false);
+          }
         }
         break;
       }
@@ -182,16 +212,20 @@ export function NoteInput({
           <div className="flex items-center gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={images.length >= 2}
+              disabled={images.length >= 2 || isUploading}
               className={cn(
                 "p-1.5 rounded-lg transition-colors",
-                images.length >= 2
+                images.length >= 2 || isUploading
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
               title={images.length >= 2 ? "Max 2 images" : "Add image"}
             >
-              <ImagePlus className="w-5 h-5" />
+              {isUploading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <ImagePlus className="w-5 h-5" />
+              )}
             </button>
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
               Beta
@@ -201,10 +235,10 @@ export function NoteInput({
           {/* Right: Send button */}
           <button
             onClick={handleSubmit}
-            disabled={!hasContent}
+            disabled={!hasContent || isUploading}
             className={cn(
               'p-2.5 rounded-full transition-all',
-              hasContent
+              hasContent && !isUploading
                 ? 'text-primary hover:bg-primary/10'
                 : 'text-muted-foreground/30 cursor-not-allowed'
             )}
