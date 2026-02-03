@@ -28,6 +28,7 @@ import { AboutPage } from './components/AboutPage';
 import { TermsPage } from './components/TermsPage';
 import { PrivacyPage } from './components/PrivacyPage';
 import { VideoPageSkeleton } from './components/ui/skeleton';
+import { VideoShare } from './components/ShareButton';
 import { useVideoStore } from './stores/videoStore';
 import { useAuthStore } from './store/authStore';
 import { useWatchHistoryStore } from './store/watchHistoryStore';
@@ -104,7 +105,7 @@ function FeatureShowcase() {
   ];
 
   return (
-    <div className="w-full pt-12 pb-40 bg-muted/30">
+    <div className="w-full pt-12 pb-20 bg-muted/30">
       <div className="max-w-[800px] mx-auto px-6">
         {/* Title */}
         <div className="text-center mb-8">
@@ -121,7 +122,7 @@ function FeatureShowcase() {
             >
               <img
                 src={`https://img.youtube.com/vi/${DEMO_VIDEO_YOUTUBE_ID}/maxresdefault.jpg`}
-                alt="Menmo Demo"
+                alt="TubeMo Demo"
                 className="w-full h-full object-cover scale-[1.05]"
               />
               {/* Top gradient fade - hides black bars */}
@@ -141,7 +142,7 @@ function FeatureShowcase() {
             <iframe
               className="w-full h-full"
               src={`https://www.youtube.com/embed/${DEMO_VIDEO_YOUTUBE_ID}?autoplay=1&rel=0&modestbranding=1`}
-              title="Menmo Demo"
+              title="TubeMo Demo"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
@@ -160,6 +161,142 @@ function FeatureShowcase() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// SEO Content Section - Below the Fold
+function SEOContent() {
+  return (
+    <div className="w-full py-16 bg-background">
+      <div className="max-w-[800px] mx-auto px-6">
+        {/* How It Works */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-6">How to Learn English with YouTube Videos</h2>
+          <div className="space-y-4 text-muted-foreground leading-relaxed">
+            <p>
+              TubeMo is a free AI-powered English learning tool that transforms any YouTube video into an interactive language lesson.
+              Simply paste a YouTube link, and our AI instantly generates bilingual subtitles, vocabulary lists, mind maps, and study notes.
+            </p>
+            <p>
+              Unlike traditional language learning apps, TubeMo lets you learn from content you actually enjoy — whether it's
+              tech talks from Steve Jobs, startup advice from Y Combinator, or interviews with industry leaders.
+              This interest-driven approach makes vocabulary acquisition natural and memorable.
+            </p>
+            <p>
+              Our AI automatically identifies key vocabulary, provides context-aware translations, and creates structured
+              summaries that help you understand and retain what you've learned. No more passive watching — every video
+              becomes an active learning opportunity.
+            </p>
+          </div>
+        </section>
+
+        {/* Features Detail */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-6">AI-Powered Learning Features</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="p-4 rounded-xl bg-muted/30">
+              <h3 className="font-medium text-foreground mb-2">Bilingual Subtitles</h3>
+              <p className="text-sm text-muted-foreground">
+                Real-time synchronized English and Chinese subtitles. Click any word to see its definition,
+                pronunciation, and example sentences from the video context.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-muted/30">
+              <h3 className="font-medium text-foreground mb-2">AI Mind Maps</h3>
+              <p className="text-sm text-muted-foreground">
+                Automatically generated visual summaries that capture the key ideas and structure of any video.
+                Perfect for review and note-taking.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-muted/30">
+              <h3 className="font-medium text-foreground mb-2">Smart Vocabulary Builder</h3>
+              <p className="text-sm text-muted-foreground">
+                Save words to your personal vocabulary book with full context. Our spaced repetition system
+                helps you remember words long-term.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-muted/30">
+              <h3 className="font-medium text-foreground mb-2">AI Presentation Slides</h3>
+              <p className="text-sm text-muted-foreground">
+                One-click generation of professional slides summarizing video content. Great for sharing
+                key takeaways or creating study materials.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-6">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            <details className="group p-4 rounded-xl bg-muted/30">
+              <summary className="font-medium text-foreground cursor-pointer list-none flex justify-between items-center">
+                Is TubeMo really free?
+                <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Yes! TubeMo is completely free for everyone. You can learn from up to 3 videos per day,
+                and invite friends to earn more. No credit card required, no hidden fees.
+              </p>
+            </details>
+            <details className="group p-4 rounded-xl bg-muted/30">
+              <summary className="font-medium text-foreground cursor-pointer list-none flex justify-between items-center">
+                What types of videos work best?
+                <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <p className="mt-3 text-sm text-muted-foreground">
+                TubeMo works great with any video that has clear spoken English: TED talks, interviews,
+                tech presentations, educational content, podcasts, and more. Videos with existing captions
+                tend to produce the best results.
+              </p>
+            </details>
+            <details className="group p-4 rounded-xl bg-muted/30">
+              <summary className="font-medium text-foreground cursor-pointer list-none flex justify-between items-center">
+                Do I need to create an account?
+                <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <p className="mt-3 text-sm text-muted-foreground">
+                You can try TubeMo without signing up. However, creating a free account lets you save
+                vocabulary, track your learning progress, and sync across devices.
+              </p>
+            </details>
+            <details className="group p-4 rounded-xl bg-muted/30">
+              <summary className="font-medium text-foreground cursor-pointer list-none flex justify-between items-center">
+                How accurate are the AI translations?
+                <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Our AI uses advanced language models to provide context-aware translations that capture
+                nuance and idioms. While no translation is perfect, our system continuously improves
+                and handles most content accurately.
+              </p>
+            </details>
+          </div>
+        </section>
+
+        {/* Why TubeMo */}
+        <section>
+          <h2 className="text-2xl font-semibold text-foreground mb-6">Why Learn English with TubeMo?</h2>
+          <div className="text-muted-foreground leading-relaxed space-y-4">
+            <p>
+              Traditional English learning methods often feel disconnected from real-world usage. Textbooks teach
+              formal English, but you want to understand how native speakers actually communicate — in interviews,
+              presentations, and everyday conversations.
+            </p>
+            <p>
+              TubeMo bridges this gap by turning authentic video content into your personal language classroom.
+              When you learn vocabulary from a Steve Jobs keynote or a tech podcast, you're not just memorizing
+              words — you're absorbing how English is used in context, with proper intonation and natural phrasing.
+            </p>
+            <p>
+              Best of all, you choose what to learn. Whether you're interested in technology, business, science,
+              or entertainment, TubeMo helps you build vocabulary around topics you actually care about.
+              This interest-driven approach leads to better retention and more enjoyable learning.
+            </p>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -260,12 +397,20 @@ function HomePage() {
       <div className="w-full max-w-[900px] mx-auto px-6">
       {/* Hero */}
       <div className="text-center mb-6">
-        <h1 className="text-3xl font-semibold text-foreground mb-2">
-          Menmo Action AI
+        <h1 className="text-4xl font-bold mb-3">
+          <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-pink-600 bg-[length:200%_auto] animate-gradient bg-clip-text text-transparent">
+            TubeMo
+          </span>
+          <span className="sr-only"> - Free AI English Learning Tool for YouTube Videos</span>
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Interest-driven learning in the AI era
+        <p className="text-base text-muted-foreground mb-4">
+          Transform any YouTube video into an interactive English lesson
         </p>
+        {/* Value Props */}
+        <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+          <span className="px-2.5 py-1 rounded-full bg-muted/50">Free for everyone</span>
+          <span className="px-2.5 py-1 rounded-full bg-muted/50">No subscription needed</span>
+        </div>
       </div>
 
       {/* Input */}
@@ -469,6 +614,9 @@ function HomePage() {
 
       {/* Feature Showcase Section */}
       <FeatureShowcase />
+
+      {/* SEO Content Section */}
+      <SEOContent />
     </div>
   );
 }
@@ -720,8 +868,13 @@ function WatchPage() {
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
           </button>
 
-          {/* Right: Sign In */}
-          <AuthDialog />
+          {/* Right: Share + Sign In */}
+          <div className="flex items-center gap-2">
+            {videoInfo && (
+              <VideoShare videoId={videoId || ''} videoTitle={videoInfo.title} />
+            )}
+            <AuthDialog />
+          </div>
         </div>
       </header>
 
@@ -806,7 +959,6 @@ function WatchPage() {
                 >
                   <Presentation className="w-4 h-4" />
                   Slides
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary">Beta</span>
                   {activeTab === 'slides' && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                   )}
@@ -829,7 +981,7 @@ function WatchPage() {
       {/* Footer - only visible when scrolling down */}
       <footer className="py-4 border-t border-border/50">
         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <span>© 2026 Menmo</span>
+          <span>© 2026 TubeMo</span>
           <a href="/about" className="hover:text-foreground transition-colors">About</a>
           <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
           <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>

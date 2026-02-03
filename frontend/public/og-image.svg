@@ -1,0 +1,54 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc"/>
+      <stop offset="100%" style="stop-color:#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Decorative circles -->
+  <circle cx="100" cy="100" r="200" fill="#3b82f6" opacity="0.05"/>
+  <circle cx="1100" cy="530" r="250" fill="#8b5cf6" opacity="0.05"/>
+
+  <!-- Logo/Brand -->
+  <text x="600" y="200" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#0f172a" text-anchor="middle">TubeMo</text>
+
+  <!-- Tagline -->
+  <text x="600" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="36" fill="#64748b" text-anchor="middle">Learn English with YouTube Videos</text>
+
+  <!-- Features -->
+  <g transform="translate(200, 350)">
+    <rect x="0" y="0" width="200" height="80" rx="12" fill="white" stroke="#e2e8f0"/>
+    <text x="100" y="35" font-family="system-ui" font-size="14" fill="#64748b" text-anchor="middle">AI Subtitles</text>
+    <text x="100" y="60" font-family="system-ui" font-size="18" font-weight="600" fill="#0f172a" text-anchor="middle">Bilingual</text>
+  </g>
+  <g transform="translate(420, 350)">
+    <rect x="0" y="0" width="200" height="80" rx="12" fill="white" stroke="#e2e8f0"/>
+    <text x="100" y="35" font-family="system-ui" font-size="14" fill="#64748b" text-anchor="middle">Mind Maps</text>
+    <text x="100" y="60" font-family="system-ui" font-size="18" font-weight="600" fill="#0f172a" text-anchor="middle">Auto-generated</text>
+  </g>
+  <g transform="translate(640, 350)">
+    <rect x="0" y="0" width="200" height="80" rx="12" fill="white" stroke="#e2e8f0"/>
+    <text x="100" y="35" font-family="system-ui" font-size="14" fill="#64748b" text-anchor="middle">Vocabulary</text>
+    <text x="100" y="60" font-family="system-ui" font-size="18" font-weight="600" fill="#0f172a" text-anchor="middle">Smart Learning</text>
+  </g>
+  <g transform="translate(860, 350)">
+    <rect x="0" y="0" width="200" height="80" rx="12" fill="white" stroke="#e2e8f0"/>
+    <text x="100" y="35" font-family="system-ui" font-size="14" fill="#64748b" text-anchor="middle">Slides</text>
+    <text x="100" y="60" font-family="system-ui" font-size="18" font-weight="600" fill="#0f172a" text-anchor="middle">One-click PPT</text>
+  </g>
+
+  <!-- CTA -->
+  <rect x="450" y="480" width="300" height="56" rx="28" fill="url(#accent)"/>
+  <text x="600" y="518" font-family="system-ui" font-size="20" font-weight="600" fill="white" text-anchor="middle">Start Learning Free</text>
+
+  <!-- URL -->
+  <text x="600" y="590" font-family="system-ui" font-size="18" fill="#94a3b8" text-anchor="middle">tubemo.com</text>
+</svg>

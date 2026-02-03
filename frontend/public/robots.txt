@@ -1,0 +1,12 @@
+# TubeMo - AI-Powered Video Learning
+# https://tubemo.com
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://tubemo.com/sitemap.xml
+
+# Crawl delay (optional, be nice to our servers)
+Crawl-delay: 1

@@ -26,7 +26,7 @@ export function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-4">1. Acceptance of Terms</h2>
             <p>
-              By accessing and using Menmo Action AI ("the Service"), you agree to be bound by these
+              By accessing and using TubeMo ("the Service"), you agree to be bound by these
               Terms of Service. If you do not agree to these terms, please do not use the Service.
             </p>
           </section>
@@ -34,7 +34,7 @@ export function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-4">2. Description of Service</h2>
             <p>
-              Menmo Action AI is an educational platform that helps users learn through video content
+              TubeMo is an educational platform that helps users learn through video content
               by providing bilingual subtitles, AI-powered mind maps, vocabulary tools, and other
               learning features.
             </p>
@@ -57,7 +57,7 @@ export function TermsPage() {
               purposes. We do not claim ownership of any third-party content.
             </p>
             <p>
-              All features, tools, and original content created by Menmo Action AI are protected by
+              All features, tools, and original content created by TubeMo are protected by
               intellectual property laws. You may not copy, modify, or distribute our proprietary
               content without permission.
             </p>
@@ -82,7 +82,7 @@ export function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-4">7. Limitation of Liability</h2>
             <p>
-              To the maximum extent permitted by law, Menmo Action AI shall not be liable for any
+              To the maximum extent permitted by law, TubeMo shall not be liable for any
               indirect, incidental, special, consequential, or punitive damages resulting from your
               use of the Service.
             </p>

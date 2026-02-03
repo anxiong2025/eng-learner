@@ -72,11 +72,11 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
       {/* Footer */}
       <footer className="w-full py-3 mt-auto border-t border-border/50">
         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <span>© 2026 Menmo</span>
+          <span>© 2026 TubeMo</span>
           <a href="/about" className="hover:text-foreground transition-colors">About</a>
           <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
           <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
-          <a href="mailto:contact@tubemo.com" className="hover:text-foreground transition-colors">Contact</a>
+          <a href="mailto:contact@tubemo.com" className="hover:text-foreground transition-colors">contact@tubemo.com</a>
         </div>
       </footer>
     </div>

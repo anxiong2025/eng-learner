@@ -287,9 +287,6 @@ export function NoteInput({
                 <ImagePlus className="w-5 h-5" />
               )}
             </button>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-              Beta
-            </span>
           </div>
 
           {/* Right: Send button */}

@@ -76,6 +76,23 @@
   @apply bg-muted-foreground/50;
 }
 
+/* Apple-style gradient text animation */
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  animation: gradient-shift 3s ease infinite;
+}
+
 /* Subtitle highlight animation */
 @keyframes highlight-pulse {
   0%, 100% {
