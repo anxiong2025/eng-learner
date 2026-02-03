@@ -183,7 +183,7 @@ function EditModal({ note, editText, setEditText, onSave, onCancel }: EditModalP
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Pencil className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">编辑笔记</span>
+            <span className="text-sm font-medium">Edit Note</span>
             <span className="text-xs text-muted-foreground font-mono">
               {formatTime(note.timestamp)}
             </span>
@@ -216,7 +216,7 @@ function EditModal({ note, editText, setEditText, onSave, onCancel }: EditModalP
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="写下你的笔记..."
+            placeholder="Write your note..."
             className="w-full h-64 px-3 py-2 text-sm bg-background border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
 
@@ -238,20 +238,20 @@ function EditModal({ note, editText, setEditText, onSave, onCancel }: EditModalP
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/30">
           <span className="text-xs text-muted-foreground">
-            ⌘/Ctrl + Enter 保存 · Esc 取消
+            ⌘/Ctrl + Enter to save · Esc to cancel
           </span>
           <div className="flex gap-2">
             <button
               onClick={onCancel}
               className="px-3 py-1.5 text-sm rounded-md text-muted-foreground hover:bg-muted transition-colors"
             >
-              取消
+              Cancel
             </button>
             <button
               onClick={onSave}
               className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              保存
+              Save
             </button>
           </div>
         </div>
@@ -304,14 +304,14 @@ function NoteItem({ note, onSeek, onUpdate, onDelete }: NoteItemProps) {
             <button
               className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
               onClick={handleStartEdit}
-              title="编辑"
+              title="Edit"
             >
               <Pencil className="h-3 w-3" />
             </button>
             <button
               className="p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
               onClick={() => onDelete(note.id)}
-              title="删除"
+              title="Delete"
             >
               <Trash2 className="h-3 w-3" />
             </button>
