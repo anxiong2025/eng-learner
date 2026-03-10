@@ -132,6 +132,7 @@ export function authRoutes() {
 
     try {
       // Exchange code for token
+      console.log('[github-cb] exchanging code for token...')
       const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
         method: 'POST',
         headers: {
@@ -145,8 +146,12 @@ export function authRoutes() {
         }),
       })
 
-      const tokenData = (await tokenRes.json()) as { access_token: string }
-      if (!tokenData.access_token) return c.redirect(`${frontendUrl}?error=token_error`)
+      const tokenData = (await tokenRes.json()) as { access_token: string; error?: string; error_description?: string }
+      if (!tokenData.access_token) {
+        console.error('[github-cb] token exchange failed:', JSON.stringify(tokenData))
+        return c.redirect(`${frontendUrl}?error=token_error`)
+      }
+      console.log('[github-cb] got access_token OK')
 
       // Get user info
       const userRes = await fetch('https://api.github.com/user', {
@@ -163,6 +168,7 @@ export function authRoutes() {
         email?: string
         avatar_url?: string
       }
+      console.log('[github-cb] user info:', userInfo.login, userInfo.id)
 
       // Get email if not public
       let email = userInfo.email
@@ -182,6 +188,7 @@ export function authRoutes() {
           emails.find((e) => e.primary && e.verified)?.email ??
           `${userInfo.login}@github.local`
       }
+      console.log('[github-cb] email resolved:', email)
 
       const userId = `github_${userInfo.id}`
       const name = userInfo.name ?? userInfo.login
@@ -200,7 +207,9 @@ export function authRoutes() {
       }
 
       const refCode = state && state.length > 0 ? state : undefined
+      console.log('[github-cb] upserting user...')
       await upsertUser(c.env.DB, user, refCode)
+      console.log('[github-cb] user upserted OK')
 
       const token = await generateToken(
         {
@@ -213,6 +222,7 @@ export function authRoutes() {
         },
         c.env,
       )
+      console.log('[github-cb] JWT generated, redirecting to frontend')
 
       return c.redirect(`${frontendUrl}?auth_success=true&token=${encodeURIComponent(token)}`)
     } catch (e) {
