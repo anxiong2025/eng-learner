@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
-
 export interface User {
   id: string;
   name: string;
@@ -36,7 +34,7 @@ export const useAuthStore = create<AuthState>()(
         set({ token, isLoading: true });
 
         try {
-          const response = await fetch(`${API_URL}/api/auth/me`, {
+          const response = await fetch('/api/auth/me', {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -77,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          const response = await fetch(`${API_URL}/api/auth/me`, {
+          const response = await fetch('/api/auth/me', {
             headers: {
               Authorization: `Bearer ${token}`,
             },
