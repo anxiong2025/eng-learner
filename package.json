@@ -1,0 +1,23 @@
+{
+  "name": "eng-learner",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter frontend dev",
+    "dev:api": "pnpm --filter worker dev",
+    "build:web": "pnpm --filter frontend build",
+    "build:api": "pnpm --filter worker build",
+    "deploy:api": "pnpm --filter worker deploy",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}

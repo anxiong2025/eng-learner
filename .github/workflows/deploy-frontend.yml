@@ -1,0 +1,33 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'shared/**'
+  workflow_dispatch:
+
+# Vercel handles deployment automatically via Git integration.
+# This workflow runs type checking and lint before Vercel deploys.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    name: Type Check & Lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter frontend tsc --noEmit

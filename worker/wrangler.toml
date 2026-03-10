@@ -1,0 +1,36 @@
+name = "eng-learner-api"
+main = "src/index.ts"
+compatibility_date = "2024-06-20"
+
+# ─── D1 Database ───
+[[d1_databases]]
+binding = "DB"
+database_name = "eng-learner-db"
+database_id = "f41e1584-a853-470c-92ef-d5a80f06626a"
+
+# ─── R2 Bucket ───
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "eng-learner-uploads"
+
+# ─── Environment Variables ───
+# Secrets (set via `wrangler secret put <KEY>`):
+#   GEMINI_API_KEY, CLAUDE_API_KEY, OPENAI_API_KEY
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+#   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+#   JWT_SECRET
+#   SUPADATA_API_KEY, APIFY_API_TOKEN
+
+[vars]
+AI_PROVIDER = "gemini"
+FRONTEND_URL = "https://eng-learner.vercel.app"
+ENVIRONMENT = "production"
+R2_PUBLIC_URL = "" # Set to your R2 public URL
+
+# ─── Dev environment overrides ───
+[env.dev]
+name = "eng-learner-api-dev"
+
+[env.dev.vars]
+FRONTEND_URL = "http://localhost:5173"
+ENVIRONMENT = "development"

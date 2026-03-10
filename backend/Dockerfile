@@ -41,8 +41,8 @@ RUN apt-get update && apt-get install -y \
 # Copy the binary
 COPY --from=builder /app/target/release/eng-learner-backend .
 
-# Expose port
-EXPOSE 3001
+# Expose port (Cloud Run injects PORT env var, default 8080)
+EXPOSE 8080
 
 # Set environment variables
 ENV RUST_LOG=info
