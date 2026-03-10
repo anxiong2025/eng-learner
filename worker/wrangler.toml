@@ -23,7 +23,7 @@ bucket_name = "eng-learner-uploads"
 
 [vars]
 AI_PROVIDER = "gemini"
-FRONTEND_URL = "https://eng-learner.vercel.app"
+FRONTEND_URL = "https://tubemo.com"
 ENVIRONMENT = "production"
 R2_PUBLIC_URL = "" # Set to your R2 public URL
 
