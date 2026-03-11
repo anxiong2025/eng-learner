@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { ArrowLeft, BookOpen, BarChart3, Github } from 'lucide-react';
+import { ArrowLeft, Github } from 'lucide-react';
 import { AuthDialog } from '@/components/AuthDialog';
 
 interface MainLayoutProps {

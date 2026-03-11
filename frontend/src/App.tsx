@@ -20,7 +20,7 @@ import { LearningStats } from './components/LearningStats';
 import { MindMapPanel } from './components/MindMap/MindMapPanel';
 import { SlidePanel } from './components/MindMap/SlidePanel';
 import { TranscriptPanel } from './components/TranscriptPanel';
-import { VocabularyPanel } from './components/VocabularyPanel';
+// import { VocabularyPanel } from './components/VocabularyPanel';
 import { NotesPanel } from './components/NotesPanel';
 import { FloatingAI } from './components/FloatingAI';
 import { AuthDialog } from './components/AuthDialog';
