@@ -5,6 +5,22 @@ import { requireAuth } from '../middleware/auth'
 export function uploadRoutes() {
   const app = new Hono<{ Bindings: Env }>()
 
+  // ─── Serve R2 file (public read) ───
+  app.get('/file/:key{.+}', async (c) => {
+    const key = c.req.param('key')
+    const object = await c.env.R2.get(key)
+
+    if (!object) {
+      return c.json({ error: 'Not found' }, 404)
+    }
+
+    const headers = new Headers()
+    headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream')
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+
+    return new Response(object.body, { headers })
+  })
+
   // ─── Upload image to R2 ───
   app.post('/image', async (c) => {
     const auth = await requireAuth(c)
@@ -45,11 +61,11 @@ export function uploadRoutes() {
         httpMetadata: { contentType: file.type },
       })
 
-      // Build public URL
-      // R2 custom domain or public access URL
+      // Build public URL - serve through worker itself for reliability
+      const workerUrl = new URL(c.req.url)
       const publicUrl = c.env.R2_PUBLIC_URL
         ? `${c.env.R2_PUBLIC_URL}/${key}`
-        : `https://${c.env.R2_BUCKET_NAME ?? 'eng-learner-uploads'}.r2.dev/${key}`
+        : `${workerUrl.origin}/api/upload/file/${key}`
 
       return c.json({
         success: true,
