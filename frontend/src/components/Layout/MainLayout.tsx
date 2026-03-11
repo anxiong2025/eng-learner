@@ -31,6 +31,7 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
 
             {/* Right side - Nav + Auth */}
             <div className="flex items-center gap-1 sm:gap-2">
+              {/* Vocabulary and Stats temporarily hidden
               {currentView !== 'vocabulary' && (
                 <button
                   onClick={() => onNavigate?.('vocabulary')}
@@ -49,6 +50,7 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
                   <BarChart3 className="w-4 h-4" />
                 </button>
               )}
+              */}
               <a
                 href="https://github.com/anxiong2025/eng-learner"
                 target="_blank"

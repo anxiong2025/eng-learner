@@ -551,14 +551,19 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await api.post<UploadResponse>('/upload/image', formData, {
+  const response = await api.post('/upload/image', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
     timeout: 60000, // 1 minute for upload
   });
 
-  return response.data;
+  // Handle both wrapped ({ success, data: { url, key } }) and flat ({ url, key }) responses
+  const body = response.data;
+  if (body.data && body.data.url) {
+    return body.data as UploadResponse;
+  }
+  return body as UploadResponse;
 }
 
 export default api;

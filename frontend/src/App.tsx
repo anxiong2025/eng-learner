@@ -32,6 +32,7 @@ import { VideoShare } from './components/ShareButton';
 import { useVideoStore } from './stores/videoStore';
 import { useAuthStore } from './store/authStore';
 import { useWatchHistoryStore } from './store/watchHistoryStore';
+import { useNoteStore } from './stores/noteStore';
 import { DEMO_VIDEO_ID } from './data/demoVideo';
 import { getInviteCode } from './api/client';
 
@@ -907,6 +908,7 @@ function WatchPage() {
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                   )}
                 </button>
+                {/* Vocab tab temporarily hidden
                 <button
                   onClick={() => setActiveTab('vocabulary')}
                   className={`flex items-center gap-1 px-2 py-2 text-xs font-medium transition-colors relative ${
@@ -921,6 +923,7 @@ function WatchPage() {
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                   )}
                 </button>
+                */}
                 <button
                   onClick={() => setActiveTab('notes')}
                   className={`flex items-center gap-1 px-2 py-2 text-xs font-medium transition-colors relative ${
@@ -968,7 +971,7 @@ function WatchPage() {
               {/* Tab Content - scrollable */}
               <div className="flex-1 overflow-auto p-4">
                 {activeTab === 'transcript' && <TranscriptPanel />}
-                {activeTab === 'vocabulary' && <VocabularyPanel />}
+                {/* {activeTab === 'vocabulary' && <VocabularyPanel />} */}
                 {activeTab === 'mindmap' && <MindMapPanel />}
                 {activeTab === 'slides' && <SlidePanel />}
                 {activeTab === 'notes' && <NotesPanel />}
@@ -1019,7 +1022,15 @@ function StatsPage() {
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated } = useAuthStore();
+
+  // Sync notes from server when user authenticates
+  useEffect(() => {
+    if (isAuthenticated) {
+      useNoteStore.getState().syncFromServer();
+      useWatchHistoryStore.getState().syncFromServer();
+    }
+  }, [isAuthenticated]);
 
   // Track page views
   useEffect(() => {

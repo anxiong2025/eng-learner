@@ -28,6 +28,25 @@ export const useNoteStore = create<NoteState>()(
             n.id === id ? { ...n, note_text: text } : n
           ),
         }));
+
+        // Sync update to server if authenticated
+        const isAuthenticated = useAuthStore.getState().isAuthenticated;
+        if (isAuthenticated) {
+          const note = get().notes.find((n) => n.id === id);
+          if (note) {
+            saveNote({
+              id: note.id,
+              video_id: note.video_id,
+              timestamp: note.timestamp,
+              english: note.english,
+              chinese: note.chinese,
+              note_text: text,
+              images: note.images,
+            }).catch((error) => {
+              console.error('Failed to sync note update to server:', error);
+            });
+          }
+        }
       },
 
       addQuickNote: async (videoId, timestamp, text, images) => {
