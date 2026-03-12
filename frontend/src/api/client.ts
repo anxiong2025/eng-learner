@@ -2,8 +2,14 @@ import axios from 'axios';
 import type { ApiResponse, VideoInfo, SubtitleResponse, Subtitle, AnalyzeResponse, AskResponse, TranslateResponse, VocabularyResponse, SlidesResponse, ChaptersResponse } from '../types';
 import { useAuthStore } from '../store/authStore';
 
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : import.meta.env.DEV
+    ? '/api'
+    : 'https://eng-learner-api.xiaoxiongxiao2.workers.dev/api';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   timeout: 30000,
 });
 
