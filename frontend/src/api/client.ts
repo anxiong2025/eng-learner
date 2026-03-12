@@ -8,6 +8,8 @@ const API_BASE = import.meta.env.VITE_API_URL
     ? '/api'
     : 'https://eng-learner-api.xiaoxiongxiao2.workers.dev/api';
 
+export { API_BASE };
+
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000,

@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { LogOut, Check, Zap, Gift } from 'lucide-react';
 import { useAuthStore, type User } from '@/store/authStore';
-import { getUsageStatus, getInviteCode } from '@/api/client';
+import { getUsageStatus, getInviteCode, API_BASE } from '@/api/client';
 
 // Dropdown menu for logged-in user
 function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
@@ -165,8 +165,8 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
     // Include ref_code if user came from an invite link
     const refCode = localStorage.getItem('invite-ref-code');
     const url = refCode
-      ? `/api/auth/${provider}?ref_code=${encodeURIComponent(refCode)}`
-      : `/api/auth/${provider}`;
+      ? `${API_BASE}/auth/${provider}?ref_code=${encodeURIComponent(refCode)}`
+      : `${API_BASE}/auth/${provider}`;
     window.location.href = url;
   };
 
