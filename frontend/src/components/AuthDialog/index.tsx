@@ -407,18 +407,16 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {codeSent && (
-                  <input
-                    type="text"
-                    placeholder="Enter 6-digit code"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && handleEmailRegister()}
-                    className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                    maxLength={6}
-                    autoFocus
-                  />
-                )}
+                <input
+                  type="text"
+                  placeholder={codeSent ? 'Enter 6-digit code' : 'Click Send Code first'}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && handleEmailRegister()}
+                  disabled={!codeSent}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  maxLength={6}
+                />
                 {error && <p className="text-sm text-destructive">{error}</p>}
                 <Button className="w-full h-11" onClick={handleEmailRegister} disabled={loading || !email || !password || !name || password.length < 8 || !codeSent || code.length !== 6}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
