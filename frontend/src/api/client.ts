@@ -576,8 +576,8 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
 
 // ─── Email Auth APIs ───
 
-export async function emailRegister(email: string, password: string, name: string): Promise<{ needsVerification: boolean }> {
-  const response = await api.post<ApiResponse<{ needsVerification: boolean }>>('/auth/register', { email, password, name });
+export async function emailRegister(email: string, password: string, name: string, code: string): Promise<{ token: string }> {
+  const response = await api.post<ApiResponse<{ token: string }>>('/auth/register', { email, password, name, code });
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.error || 'Registration failed');
   }

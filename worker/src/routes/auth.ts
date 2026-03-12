@@ -299,13 +299,19 @@ export function authRoutes() {
 
   // ─── Email: Register ───
   app.post('/register', async (c) => {
-    const { email, password, name } = await c.req.json<{ email: string; password: string; name: string }>()
+    const { email, password, name, code } = await c.req.json<{ email: string; password: string; name: string; code: string }>()
 
-    if (!email || !password || !name) {
-      return c.json({ success: false, error: 'Email, password and name are required' }, 400)
+    if (!email || !password || !name || !code) {
+      return c.json({ success: false, error: 'Email, password, name and verification code are required' }, 400)
     }
     if (password.length < 8) {
       return c.json({ success: false, error: 'Password must be at least 8 characters' }, 400)
+    }
+
+    // Verify the code first
+    const codeValid = await verifyCode(c.env.DB, email, code, 'verify')
+    if (!codeValid) {
+      return c.json({ success: false, error: 'Invalid or expired verification code' }, 400)
     }
 
     // Check if email already exists
@@ -318,18 +324,30 @@ export function authRoutes() {
     const refCode = undefined // Could accept from body if needed
     await createEmailUser(c.env.DB, email, name, passwordHash, refCode)
 
-    // Generate and send verification code
-    const code = generateVerifyCode()
-    await saveVerificationCode(c.env.DB, email, code, 'verify')
-    const sent = await sendVerificationEmail(email, code, c.env)
-    if (!sent) {
-      console.error('Failed to send verification email to', email)
+    // Mark email as verified since code was already validated
+    await markEmailVerified(c.env.DB, email)
+
+    // Get user and generate token
+    const user = await getUserByEmail(c.env.DB, email)
+    if (!user) {
+      return c.json({ success: false, error: 'Failed to create account' }, 500)
     }
 
-    // Do NOT return token — user must verify email first
+    const token = await generateToken(
+      {
+        user_id: user.id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar ?? undefined,
+        provider: 'email',
+        tier: user.tier,
+      },
+      c.env,
+    )
+
     return c.json({
       success: true,
-      data: { needsVerification: true },
+      data: { token },
     })
   })
 

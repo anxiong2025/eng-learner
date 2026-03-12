@@ -169,6 +169,7 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [codeSent, setCodeSent] = useState(false);
 
   // Countdown timer for resend
   useEffect(() => {
@@ -187,6 +188,7 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
       setCode('');
       setError('');
       setLoading(false);
+      setCodeSent(false);
     }
   }, [isOpen]);
 
@@ -219,13 +221,28 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
     }
   };
 
+  const handleSendCode = async () => {
+    if (!email) return;
+    setError('');
+    setLoading(true);
+    try {
+      await sendVerificationCode(email);
+      setCodeSent(true);
+      setResendCountdown(60);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEmailRegister = async () => {
     setError('');
     setLoading(true);
     try {
-      await emailRegister(email, password, name);
-      setView('verify');
-      setResendCountdown(60);
+      const result = await emailRegister(email, password, name, code);
+      await login(result.token);
+      setIsOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Registration failed');
     } finally {
@@ -366,33 +383,54 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
                   onChange={(e) => setName(e.target.value)}
                   className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="flex-1 h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <Button
+                    variant="outline"
+                    className="h-11 px-3 whitespace-nowrap text-xs"
+                    onClick={handleSendCode}
+                    disabled={loading || !email || resendCountdown > 0}
+                  >
+                    {resendCountdown > 0 ? `${resendCountdown}s` : 'Send Code'}
+                  </Button>
+                </div>
                 <input
                   type="password"
                   placeholder="Password (min 8 characters)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleEmailRegister()}
                   className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
+                {codeSent && (
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && handleEmailRegister()}
+                    className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                    maxLength={6}
+                    autoFocus
+                  />
+                )}
                 {error && <p className="text-sm text-destructive">{error}</p>}
-                <Button className="w-full h-11" onClick={handleEmailRegister} disabled={loading || !email || !password || !name || password.length < 8}>
+                <Button className="w-full h-11" onClick={handleEmailRegister} disabled={loading || !email || !password || !name || password.length < 8 || !codeSent || code.length !== 6}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Create Account
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <button className="text-primary hover:underline font-medium" onClick={() => { setError(''); setView('login'); }}>
+                  <button className="text-primary hover:underline font-medium" onClick={() => { setError(''); setCodeSent(false); setCode(''); setView('login'); }}>
                     Sign In
                   </button>
                 </p>
-                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground mx-auto" onClick={() => { setError(''); setView('main'); }}>
+                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground mx-auto" onClick={() => { setError(''); setCodeSent(false); setCode(''); setView('main'); }}>
                   <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
                 </button>
               </div>
