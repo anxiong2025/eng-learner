@@ -316,7 +316,7 @@ export function authRoutes() {
 
     const passwordHash = await hashPassword(password)
     const refCode = undefined // Could accept from body if needed
-    const userId = await createEmailUser(c.env.DB, email, name, passwordHash, refCode)
+    await createEmailUser(c.env.DB, email, name, passwordHash, refCode)
 
     // Generate and send verification code
     const code = generateVerifyCode()
@@ -326,15 +326,10 @@ export function authRoutes() {
       console.error('Failed to send verification email to', email)
     }
 
-    // Generate token (user can use app, but some features may require verified email)
-    const token = await generateToken(
-      { user_id: userId, email, name, provider: 'email', tier: 'free' },
-      c.env,
-    )
-
+    // Do NOT return token — user must verify email first
     return c.json({
       success: true,
-      data: { token, needsVerification: true },
+      data: { needsVerification: true },
     })
   })
 
@@ -354,6 +349,15 @@ export function authRoutes() {
     const valid = await verifyPassword(password, user.password_hash)
     if (!valid) {
       return c.json({ success: false, error: 'Invalid email or password' }, 401)
+    }
+
+    // Require email verification before login
+    if (!user.email_verified) {
+      // Resend verification code
+      const code = generateVerifyCode()
+      await saveVerificationCode(c.env.DB, email, code, 'verify')
+      await sendVerificationEmail(email, code, c.env)
+      return c.json({ success: false, error: 'Please verify your email first. A new code has been sent.', code: 'EMAIL_NOT_VERIFIED' }, 403)
     }
 
     // Update last login
@@ -403,7 +407,26 @@ export function authRoutes() {
     }
 
     await markEmailVerified(c.env.DB, email)
-    return c.json({ success: true })
+
+    // Get user and generate token now that email is verified
+    const user = await getUserByEmail(c.env.DB, email)
+    if (!user) {
+      return c.json({ success: false, error: 'User not found' }, 404)
+    }
+
+    const token = await generateToken(
+      {
+        user_id: user.id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar ?? undefined,
+        provider: 'email',
+        tier: user.tier,
+      },
+      c.env,
+    )
+
+    return c.json({ success: true, data: { token } })
   })
 
   return app

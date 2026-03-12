@@ -576,8 +576,8 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
 
 // ─── Email Auth APIs ───
 
-export async function emailRegister(email: string, password: string, name: string): Promise<{ token: string; needsVerification: boolean }> {
-  const response = await api.post<ApiResponse<{ token: string; needsVerification: boolean }>>('/auth/register', { email, password, name });
+export async function emailRegister(email: string, password: string, name: string): Promise<{ needsVerification: boolean }> {
+  const response = await api.post<ApiResponse<{ needsVerification: boolean }>>('/auth/register', { email, password, name });
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.error || 'Registration failed');
   }
@@ -599,11 +599,12 @@ export async function sendVerificationCode(email: string): Promise<void> {
   }
 }
 
-export async function verifyEmail(email: string, code: string): Promise<void> {
-  const response = await api.post<ApiResponse<null>>('/auth/verify-email', { email, code });
-  if (!response.data.success) {
+export async function verifyEmail(email: string, code: string): Promise<{ token: string }> {
+  const response = await api.post<ApiResponse<{ token: string }>>('/auth/verify-email', { email, code });
+  if (!response.data.success || !response.data.data) {
     throw new Error(response.data.error || 'Invalid verification code');
   }
+  return response.data.data;
 }
 
 export default api;

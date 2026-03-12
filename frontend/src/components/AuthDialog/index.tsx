@@ -168,6 +168,14 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
+
+  // Countdown timer for resend
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -198,8 +206,14 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
       const result = await emailLogin(email, password);
       await login(result.token);
       setIsOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed');
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.message || 'Login failed';
+      const code = e?.response?.data?.code;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setView('verify');
+        setResendCountdown(60);
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -209,13 +223,9 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
     setError('');
     setLoading(true);
     try {
-      const result = await emailRegister(email, password, name);
-      await login(result.token);
-      if (result.needsVerification) {
-        setView('verify');
-      } else {
-        setIsOpen(false);
-      }
+      await emailRegister(email, password, name);
+      setView('verify');
+      setResendCountdown(60);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Registration failed');
     } finally {
@@ -227,7 +237,8 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
     setError('');
     setLoading(true);
     try {
-      await verifyEmail(email, code);
+      const result = await verifyEmail(email, code);
+      await login(result.token);
       setIsOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Verification failed');
@@ -237,9 +248,11 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
   };
 
   const handleResendCode = async () => {
+    if (resendCountdown > 0) return;
     setError('');
     try {
       await sendVerificationCode(email);
+      setResendCountdown(60);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to resend code');
     }
@@ -409,13 +422,14 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   Didn't receive the code?{' '}
-                  <button className="text-primary hover:underline font-medium" onClick={handleResendCode}>
-                    Resend
-                  </button>
+                  {resendCountdown > 0 ? (
+                    <span className="text-muted-foreground">Resend in {resendCountdown}s</span>
+                  ) : (
+                    <button className="text-primary hover:underline font-medium" onClick={handleResendCode}>
+                      Resend
+                    </button>
+                  )}
                 </p>
-                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground mx-auto" onClick={() => setIsOpen(false)}>
-                  Skip for now
-                </button>
               </div>
             </>
           )}
