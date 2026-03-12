@@ -229,8 +229,8 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
       await sendVerificationCode(email);
       setCodeSent(true);
       setResendCountdown(60);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send code');
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e?.message || 'Failed to send code');
     } finally {
       setLoading(false);
     }
@@ -243,8 +243,8 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
       const result = await emailRegister(email, password, name, code);
       await login(result.token);
       setIsOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Registration failed');
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -257,8 +257,8 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
       const result = await verifyEmail(email, code);
       await login(result.token);
       setIsOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Verification failed');
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e?.message || 'Verification failed');
     } finally {
       setLoading(false);
     }
