@@ -1,0 +1,2 @@
+/api/*  https://eng-learner-api.xiaoxiongxiao2.workers.dev/api/:splat  200
+/*      /index.html  200

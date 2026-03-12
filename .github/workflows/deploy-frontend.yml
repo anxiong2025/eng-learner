@@ -1,4 +1,4 @@
-name: Deploy Frontend
+name: Frontend Check
 
 on:
   push:
@@ -6,14 +6,18 @@ on:
     paths:
       - 'frontend/**'
       - 'shared/**'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'shared/**'
   workflow_dispatch:
 
-# Vercel handles deployment automatically via Git integration.
-# This workflow runs type checking and lint before Vercel deploys.
+# Cloudflare Pages handles deployment automatically via Git integration.
+# This workflow runs type checking on push and PR.
 jobs:
   check:
     runs-on: ubuntu-latest
-    name: Type Check & Lint
+    name: Type Check
     steps:
       - uses: actions/checkout@v4
 
