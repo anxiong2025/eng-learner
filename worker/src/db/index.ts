@@ -904,3 +904,55 @@ export async function saveSlidesCache(
     .bind(videoId, slidesJson, now(), slidesJson, now())
     .run()
 }
+
+// ════════════════════════════════════════════════════════════
+// Subtitle Cache
+// ════════════════════════════════════════════════════════════
+
+export async function getCachedSubtitles(
+  db: D1Database,
+  videoId: string,
+  lang: string,
+): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT subtitles_json FROM video_subtitles WHERE video_id = ? AND lang = ?')
+    .bind(videoId, lang)
+    .first<{ subtitles_json: string }>()
+  return row?.subtitles_json ?? null
+}
+
+export async function saveSubtitlesCache(
+  db: D1Database,
+  videoId: string,
+  lang: string,
+  subtitlesJson: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO video_subtitles (video_id, lang, subtitles_json, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(video_id, lang) DO UPDATE SET subtitles_json = ?, created_at = ?`,
+    )
+    .bind(videoId, lang, subtitlesJson, now(), subtitlesJson, now())
+    .run()
+}
+
+// ════════════════════════════════════════════════════════════
+// Cache Cleanup
+// ════════════════════════════════════════════════════════════
+
+export async function cleanExpiredCache(db: D1Database, days: number = 30): Promise<{ subtitles: number; mindmaps: number; slides: number }> {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  const [s, m, sl] = await Promise.all([
+    db.prepare('DELETE FROM video_subtitles WHERE created_at < ?').bind(cutoff).run(),
+    db.prepare('DELETE FROM video_mindmaps WHERE created_at < ?').bind(cutoff).run(),
+    db.prepare('DELETE FROM video_slides WHERE created_at < ?').bind(cutoff).run(),
+  ])
+
+  return {
+    subtitles: s.meta.changes ?? 0,
+    mindmaps: m.meta.changes ?? 0,
+    slides: sl.meta.changes ?? 0,
+  }
+}

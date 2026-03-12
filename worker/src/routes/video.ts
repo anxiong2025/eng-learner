@@ -70,8 +70,27 @@ export function videoRoutes() {
     const videoId = c.req.param('video_id')
     const lang = c.req.query('lang') || 'en'
 
+    // Check D1 cache first
+    try {
+      const cached = await db.getCachedSubtitles(c.env.DB, videoId, lang)
+      if (cached) {
+        return c.json({
+          success: true,
+          data: { video_id: videoId, subtitles: JSON.parse(cached), language: lang },
+        })
+      }
+    } catch (_) {
+      // Cache miss or error, proceed to fetch
+    }
+
     try {
       const subtitles = await fetchSubtitles(videoId, lang, c.env)
+
+      // Save to cache (fire and forget)
+      c.executionCtx.waitUntil(
+        db.saveSubtitlesCache(c.env.DB, videoId, lang, JSON.stringify(subtitles))
+      )
+
       return c.json({
         success: true,
         data: { video_id: videoId, subtitles, language: lang },

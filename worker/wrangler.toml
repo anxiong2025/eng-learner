@@ -27,6 +27,10 @@ FRONTEND_URL = "https://tubemo.com"
 ENVIRONMENT = "production"
 R2_PUBLIC_URL = "" # Set to your R2 public URL
 
+# ─── Cron Triggers ───
+[triggers]
+crons = ["0 3 * * *"]  # Daily at 03:00 UTC
+
 # ─── Dev environment overrides ───
 [env.dev]
 name = "eng-learner-api-dev"
