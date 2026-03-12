@@ -956,3 +956,96 @@ export async function cleanExpiredCache(db: D1Database, days: number = 30): Prom
     slides: sl.meta.changes ?? 0,
   }
 }
+
+// ════════════════════════════════════════════════════════════
+// Email Auth Functions
+// ════════════════════════════════════════════════════════════
+
+export async function getUserByEmail(db: D1Database, email: string): Promise<DbUser & { password_hash?: string; email_verified?: number } | null> {
+  return db
+    .prepare('SELECT *, COALESCE(bonus_quota, 0) as bonus_quota FROM users WHERE email = ?')
+    .bind(email)
+    .first()
+}
+
+export async function createEmailUser(
+  db: D1Database,
+  email: string,
+  name: string,
+  passwordHash: string,
+  refCode?: string | null,
+): Promise<string> {
+  const n = now()
+  const inviteCode = generateInviteCode()
+  const userId = `email_${crypto.randomUUID()}`
+
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, name, avatar, provider, tier, invite_code, bonus_quota, invited_by, password_hash, email_verified, created_at, last_login_at)
+       VALUES (?, ?, ?, NULL, 'email', 'free', ?, 0, ?, ?, 0, ?, ?)`,
+    )
+    .bind(userId, email, name, inviteCode, refCode ?? null, passwordHash, n, n)
+    .run()
+
+  if (refCode) {
+    await addBonusQuotaByInviteCode(db, refCode, INVITE_BONUS_QUOTA)
+  }
+
+  await db
+    .prepare('INSERT OR IGNORE INTO user_progress (user_id) VALUES (?)')
+    .bind(userId)
+    .run()
+
+  return userId
+}
+
+export async function markEmailVerified(db: D1Database, email: string): Promise<void> {
+  await db
+    .prepare('UPDATE users SET email_verified = 1 WHERE email = ?')
+    .bind(email)
+    .run()
+}
+
+export async function saveVerificationCode(
+  db: D1Database,
+  email: string,
+  code: string,
+  type: 'verify' | 'reset' = 'verify',
+  expiresMinutes: number = 10,
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000).toISOString()
+  // Invalidate old codes
+  await db
+    .prepare('UPDATE email_verification_codes SET used = 1 WHERE email = ? AND type = ? AND used = 0')
+    .bind(email, type)
+    .run()
+  await db
+    .prepare('INSERT INTO email_verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)')
+    .bind(email, code, type, expiresAt)
+    .run()
+}
+
+export async function verifyCode(
+  db: D1Database,
+  email: string,
+  code: string,
+  type: 'verify' | 'reset' = 'verify',
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT id FROM email_verification_codes
+       WHERE email = ? AND code = ? AND type = ? AND used = 0 AND expires_at > datetime('now')
+       LIMIT 1`,
+    )
+    .bind(email, code, type)
+    .first<{ id: number }>()
+
+  if (!row) return false
+
+  await db
+    .prepare('UPDATE email_verification_codes SET used = 1 WHERE id = ?')
+    .bind(row.id)
+    .run()
+
+  return true
+}

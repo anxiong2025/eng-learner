@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { API_BASE } from '@/api/client';
 
 export interface User {
   id: string;
@@ -34,7 +35,7 @@ export const useAuthStore = create<AuthState>()(
         set({ token, isLoading: true });
 
         try {
-          const response = await fetch('/api/auth/me', {
+          const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -75,7 +76,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          const response = await fetch('/api/auth/me', {
+          const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },

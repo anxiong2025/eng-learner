@@ -18,7 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { LogOut, Check, Zap, Gift } from 'lucide-react';
 import { useAuthStore, type User } from '@/store/authStore';
-import { getUsageStatus, getInviteCode, API_BASE } from '@/api/client';
+import { getUsageStatus, getInviteCode, API_BASE, emailRegister, emailLogin, sendVerificationCode, verifyEmail } from '@/api/client';
+import { Mail, ArrowLeft, Loader2 } from 'lucide-react';
 
 // Dropdown menu for logged-in user
 function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
@@ -156,13 +157,33 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setIsOpen = onOpenChange || setInternalOpen;
 
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, login, logout } = useAuthStore();
+
+  // Email auth state
+  type AuthView = 'main' | 'login' | 'register' | 'verify';
+  const [view, setView] = useState<AuthView>('main');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Reset state when dialog opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setView('main');
+      setEmail('');
+      setPassword('');
+      setName('');
+      setCode('');
+      setError('');
+      setLoading(false);
+    }
+  }, [isOpen]);
 
   const handleSocialLogin = (provider: 'google' | 'github') => {
-    // Save current URL to redirect back after login
     localStorage.setItem('auth-return-url', window.location.href);
-
-    // Include ref_code if user came from an invite link
     const refCode = localStorage.getItem('invite-ref-code');
     const url = refCode
       ? `${API_BASE}/auth/${provider}?ref_code=${encodeURIComponent(refCode)}`
@@ -170,17 +191,68 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
     window.location.href = url;
   };
 
+  const handleEmailLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await emailLogin(email, password);
+      await login(result.token);
+      setIsOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailRegister = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await emailRegister(email, password, name);
+      await login(result.token);
+      if (result.needsVerification) {
+        setView('verify');
+      } else {
+        setIsOpen(false);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await verifyEmail(email, code);
+      setIsOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    try {
+      await sendVerificationCode(email);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to resend code');
+    }
+  };
+
   const handleLogout = () => {
     logout();
   };
 
-  // Show user avatar with dropdown if authenticated (only when showTrigger is true)
   if (isAuthenticated && user && showTrigger) {
     return <UserMenu user={user} onLogout={handleLogout} />;
   }
 
-  // If authenticated but showTrigger is false, don't render anything
-  // (this is used when AuthDialog is just for showing login prompt)
   if (isAuthenticated && !showTrigger) {
     return null;
   }
@@ -196,34 +268,157 @@ export function AuthDialog({ open: controlledOpen, onOpenChange, showTrigger = t
       )}
       <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden">
         <div className="p-6">
-          <DialogHeader className="text-center pb-4">
-            <DialogTitle className="text-xl font-semibold">
-              Sign in
-            </DialogTitle>
-            <DialogDescription>
-              Unlock more features and sync your progress
-            </DialogDescription>
-          </DialogHeader>
+          {view === 'main' && (
+            <>
+              <DialogHeader className="text-center pb-4">
+                <DialogTitle className="text-xl font-semibold">Sign in</DialogTitle>
+                <DialogDescription>Unlock more features and sync your progress</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Button variant="outline" className="w-full h-11 font-medium" onClick={() => handleSocialLogin('google')}>
+                  <GoogleIcon />
+                  Continue with Google
+                </Button>
+                <Button variant="outline" className="w-full h-11 font-medium" onClick={() => handleSocialLogin('github')}>
+                  <GitHubIcon />
+                  Continue with GitHub
+                </Button>
 
-          {/* Social Login Buttons */}
-          <div className="space-y-3">
-            <Button
-              variant="outline"
-              className="w-full h-11 font-medium"
-              onClick={() => handleSocialLogin('google')}
-            >
-              <GoogleIcon />
-              Continue with Google
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full h-11 font-medium"
-              onClick={() => handleSocialLogin('github')}
-            >
-              <GitHubIcon />
-              Continue with GitHub
-            </Button>
-          </div>
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">or</span>
+                  </div>
+                </div>
+
+                <Button variant="outline" className="w-full h-11 font-medium" onClick={() => setView('login')}>
+                  <Mail className="w-5 h-5 mr-2" />
+                  Continue with Email
+                </Button>
+              </div>
+            </>
+          )}
+
+          {view === 'login' && (
+            <>
+              <DialogHeader className="text-center pb-4">
+                <DialogTitle className="text-xl font-semibold">Sign in with Email</DialogTitle>
+                <DialogDescription>Enter your email and password</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleEmailLogin()}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button className="w-full h-11" onClick={handleEmailLogin} disabled={loading || !email || !password}>
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Sign In
+                </Button>
+                <p className="text-center text-sm text-muted-foreground">
+                  Don't have an account?{' '}
+                  <button className="text-primary hover:underline font-medium" onClick={() => { setError(''); setView('register'); }}>
+                    Sign Up
+                  </button>
+                </p>
+                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground mx-auto" onClick={() => { setError(''); setView('main'); }}>
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
+                </button>
+              </div>
+            </>
+          )}
+
+          {view === 'register' && (
+            <>
+              <DialogHeader className="text-center pb-4">
+                <DialogTitle className="text-xl font-semibold">Create Account</DialogTitle>
+                <DialogDescription>Sign up with your email</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <input
+                  type="password"
+                  placeholder="Password (min 8 characters)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleEmailRegister()}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button className="w-full h-11" onClick={handleEmailRegister} disabled={loading || !email || !password || !name || password.length < 8}>
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Create Account
+                </Button>
+                <p className="text-center text-sm text-muted-foreground">
+                  Already have an account?{' '}
+                  <button className="text-primary hover:underline font-medium" onClick={() => { setError(''); setView('login'); }}>
+                    Sign In
+                  </button>
+                </p>
+                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground mx-auto" onClick={() => { setError(''); setView('main'); }}>
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
+                </button>
+              </div>
+            </>
+          )}
+
+          {view === 'verify' && (
+            <>
+              <DialogHeader className="text-center pb-4">
+                <DialogTitle className="text-xl font-semibold">Verify Email</DialogTitle>
+                <DialogDescription>We sent a 6-digit code to {email}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && handleVerifyCode()}
+                  className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                  maxLength={6}
+                />
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button className="w-full h-11" onClick={handleVerifyCode} disabled={loading || code.length !== 6}>
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Verify
+                </Button>
+                <p className="text-center text-sm text-muted-foreground">
+                  Didn't receive the code?{' '}
+                  <button className="text-primary hover:underline font-medium" onClick={handleResendCode}>
+                    Resend
+                  </button>
+                </p>
+                <button className="flex items-center text-sm text-muted-foreground hover:text-foreground mx-auto" onClick={() => setIsOpen(false)}>
+                  Skip for now
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

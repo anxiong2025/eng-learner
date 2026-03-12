@@ -1,7 +1,73 @@
 import { Hono } from 'hono'
 import type { Env } from '../env'
 import { generateToken, getAuthUser } from '../middleware/auth'
-import { upsertUser, type DbUser } from '../db'
+import { upsertUser, createEmailUser, getUserByEmail, markEmailVerified, saveVerificationCode, verifyCode, type DbUser } from '../db'
+
+// ─── Password hashing utilities (Web Crypto API) ───
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+  const hash = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    256,
+  )
+  const saltHex = [...salt].map((b) => b.toString(16).padStart(2, '0')).join('')
+  const hashHex = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `${saltHex}:${hashHex}`
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [saltHex, hashHex] = stored.split(':')
+  const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map((b) => parseInt(b, 16)))
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+  const hash = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    256,
+  )
+  const computed = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return computed === hashHex
+}
+
+function generateVerifyCode(): string {
+  const arr = crypto.getRandomValues(new Uint8Array(3))
+  return ((arr[0] << 16) | (arr[1] << 8) | arr[2]).toString().slice(-6).padStart(6, '0')
+}
+
+async function sendVerificationEmail(email: string, code: string, env: Env): Promise<boolean> {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: 'TubeMo <noreply@tubemo.com>',
+      to: [email],
+      subject: 'Your TubeMo verification code',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+        <h2 style="color:#111;margin-bottom:8px">Verify your email</h2>
+        <p style="color:#555">Your verification code is:</p>
+        <div style="font-size:32px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px 0;color:#111">${code}</div>
+        <p style="color:#888;font-size:13px">This code expires in 10 minutes. If you didn't request this, please ignore this email.</p>
+      </div>`,
+    }),
+  })
+  return res.ok
+}
 
 export function authRoutes() {
   const app = new Hono<{ Bindings: Env }>()
@@ -229,6 +295,115 @@ export function authRoutes() {
       console.error('GitHub OAuth error:', e)
       return c.redirect(`${frontendUrl}?error=auth_error`)
     }
+  })
+
+  // ─── Email: Register ───
+  app.post('/register', async (c) => {
+    const { email, password, name } = await c.req.json<{ email: string; password: string; name: string }>()
+
+    if (!email || !password || !name) {
+      return c.json({ success: false, error: 'Email, password and name are required' }, 400)
+    }
+    if (password.length < 8) {
+      return c.json({ success: false, error: 'Password must be at least 8 characters' }, 400)
+    }
+
+    // Check if email already exists
+    const existing = await getUserByEmail(c.env.DB, email)
+    if (existing) {
+      return c.json({ success: false, error: 'An account with this email already exists' }, 409)
+    }
+
+    const passwordHash = await hashPassword(password)
+    const refCode = undefined // Could accept from body if needed
+    const userId = await createEmailUser(c.env.DB, email, name, passwordHash, refCode)
+
+    // Generate and send verification code
+    const code = generateVerifyCode()
+    await saveVerificationCode(c.env.DB, email, code, 'verify')
+    const sent = await sendVerificationEmail(email, code, c.env)
+    if (!sent) {
+      console.error('Failed to send verification email to', email)
+    }
+
+    // Generate token (user can use app, but some features may require verified email)
+    const token = await generateToken(
+      { user_id: userId, email, name, provider: 'email', tier: 'free' },
+      c.env,
+    )
+
+    return c.json({
+      success: true,
+      data: { token, needsVerification: true },
+    })
+  })
+
+  // ─── Email: Login ───
+  app.post('/login', async (c) => {
+    const { email, password } = await c.req.json<{ email: string; password: string }>()
+
+    if (!email || !password) {
+      return c.json({ success: false, error: 'Email and password are required' }, 400)
+    }
+
+    const user = await getUserByEmail(c.env.DB, email)
+    if (!user || !user.password_hash) {
+      return c.json({ success: false, error: 'Invalid email or password' }, 401)
+    }
+
+    const valid = await verifyPassword(password, user.password_hash)
+    if (!valid) {
+      return c.json({ success: false, error: 'Invalid email or password' }, 401)
+    }
+
+    // Update last login
+    await c.env.DB
+      .prepare('UPDATE users SET last_login_at = datetime(\'now\') WHERE id = ?')
+      .bind(user.id)
+      .run()
+
+    const token = await generateToken(
+      {
+        user_id: user.id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar ?? undefined,
+        provider: 'email',
+        tier: user.tier,
+      },
+      c.env,
+    )
+
+    return c.json({
+      success: true,
+      data: { token, emailVerified: !!user.email_verified },
+    })
+  })
+
+  // ─── Email: Send verification code ───
+  app.post('/send-code', async (c) => {
+    const { email } = await c.req.json<{ email: string }>()
+    if (!email) return c.json({ success: false, error: 'Email is required' }, 400)
+
+    const code = generateVerifyCode()
+    await saveVerificationCode(c.env.DB, email, code, 'verify')
+    const sent = await sendVerificationEmail(email, code, c.env)
+
+    return c.json({ success: sent, error: sent ? undefined : 'Failed to send email' })
+  })
+
+  // ─── Email: Verify code ───
+  app.post('/verify-email', async (c) => {
+    const { email, code } = await c.req.json<{ email: string; code: string }>()
+    if (!email || !code) return c.json({ success: false, error: 'Email and code are required' }, 400)
+
+    const valid = await verifyCode(c.env.DB, email, code, 'verify')
+    if (!valid) {
+      return c.json({ success: false, error: 'Invalid or expired code' }, 400)
+    }
+
+    await markEmailVerified(c.env.DB, email)
+    return c.json({ success: true })
   })
 
   return app

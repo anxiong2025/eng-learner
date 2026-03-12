@@ -574,4 +574,36 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
   return body as UploadResponse;
 }
 
+// ─── Email Auth APIs ───
+
+export async function emailRegister(email: string, password: string, name: string): Promise<{ token: string; needsVerification: boolean }> {
+  const response = await api.post<ApiResponse<{ token: string; needsVerification: boolean }>>('/auth/register', { email, password, name });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Registration failed');
+  }
+  return response.data.data;
+}
+
+export async function emailLogin(email: string, password: string): Promise<{ token: string; emailVerified: boolean }> {
+  const response = await api.post<ApiResponse<{ token: string; emailVerified: boolean }>>('/auth/login', { email, password });
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Login failed');
+  }
+  return response.data.data;
+}
+
+export async function sendVerificationCode(email: string): Promise<void> {
+  const response = await api.post<ApiResponse<null>>('/auth/send-code', { email });
+  if (!response.data.success) {
+    throw new Error(response.data.error || 'Failed to send verification code');
+  }
+}
+
+export async function verifyEmail(email: string, code: string): Promise<void> {
+  const response = await api.post<ApiResponse<null>>('/auth/verify-email', { email, code });
+  if (!response.data.success) {
+    throw new Error(response.data.error || 'Invalid verification code');
+  }
+}
+
 export default api;

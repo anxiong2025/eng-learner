@@ -22,6 +22,7 @@ export interface Env {
   // ─── External APIs ───
   SUPADATA_API_KEY: string
   APIFY_API_TOKEN?: string
+  RESEND_API_KEY: string
 
   // ─── Config ───
   FRONTEND_URL: string
