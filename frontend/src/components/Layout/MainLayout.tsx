@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
-import { ArrowLeft, Github } from 'lucide-react';
+import { ArrowLeft, Github, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { AuthDialog } from '@/components/AuthDialog';
 
 interface MainLayoutProps {
@@ -10,6 +11,7 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children, hideHeader = false, onNavigate, currentView = 'home' }: MainLayoutProps) {
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -51,6 +53,13 @@ export function MainLayout({ children, hideHeader = false, onNavigate, currentVi
                 </button>
               )}
               */}
+              <button
+                onClick={() => navigate('/download')}
+                className="h-9 w-9 sm:h-8 sm:w-8 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Video Download"
+              >
+                <Download className="w-4 h-4" />
+              </button>
               <a
                 href="https://github.com/anxiong2025/eng-learner"
                 target="_blank"

@@ -29,6 +29,7 @@ import { TermsPage } from './components/TermsPage';
 import { PrivacyPage } from './components/PrivacyPage';
 import { VideoPageSkeleton } from './components/ui/skeleton';
 import { VideoShare } from './components/ShareButton';
+import { VideoDownload } from './components/VideoDownload';
 import { useVideoStore } from './stores/videoStore';
 import { useAuthStore } from './store/authStore';
 import { useWatchHistoryStore } from './store/watchHistoryStore';
@@ -402,10 +403,10 @@ function HomePage() {
           <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-pink-600 bg-[length:200%_auto] animate-gradient bg-clip-text text-transparent">
             TubeMo
           </span>
-          <span className="sr-only"> - Free AI English Learning Tool for YouTube Videos</span>
+          <span className="sr-only"> - Transform Raw Videos into Actionable Insight</span>
         </h1>
         <p className="text-base text-muted-foreground mb-4">
-          Transform any YouTube video into an interactive English lesson
+          Transform Raw Videos into Actionable Insight
         </p>
         {/* Value Props */}
         <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
@@ -1038,6 +1039,7 @@ function App() {
       location.pathname.startsWith('/watch/') ? 'Watch' :
       location.pathname === '/vocabulary' ? 'Vocabulary' :
       location.pathname === '/stats' ? 'Stats' :
+      location.pathname === '/download' ? 'Download' :
       location.pathname === '/about' ? 'About' : 'Other';
     trackPageView(pageName);
   }, [location.pathname]);
@@ -1109,6 +1111,11 @@ function App() {
       <Route path="/watch/:videoId" element={<WatchPage />} />
       <Route path="/vocabulary" element={<VocabularyPage />} />
       <Route path="/stats" element={<StatsPage />} />
+      <Route path="/download" element={
+          <MainLayout onNavigate={handleNavigate}>
+            <VideoDownload />
+          </MainLayout>
+        } />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
