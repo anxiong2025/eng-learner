@@ -67,7 +67,7 @@ export function VideoDownload() {
     setLoading(true);
 
     try {
-      const resp = await fetch('https://api.cobalt.tools/', {
+      const resp = await fetch('https://cobalt-773996674543.us-central1.run.app/', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -119,9 +119,14 @@ export function VideoDownload() {
 
         setUrl('');
       } else if (data.status === 'error') {
-        setError(data.error?.code === 'error.api.link.unsupported'
-          ? 'This link is not supported. Please try a different video.'
-          : data.error?.code || 'Download failed. Please try a different link.');
+        const code = data.error?.code;
+        if (code === 'error.api.youtube.login') {
+          setError('YouTube downloads are temporarily unavailable due to bot detection. X (Twitter) videos work fine!');
+        } else if (code === 'error.api.link.unsupported') {
+          setError('This link is not supported. Please try a different video.');
+        } else {
+          setError(code || 'Download failed. Please try a different link.');
+        }
       } else {
         setError('Unexpected response. Please try again.');
       }
@@ -217,6 +222,7 @@ export function VideoDownload() {
                 <path d="M9.545 15.568V8.432L15.818 12z" fill="white"/>
               </svg>
               YouTube
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">unstable</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
