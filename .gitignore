@@ -36,3 +36,6 @@ temp/
 *.db
 *.sqlite
 worker/.dev.vars
+
+# Claude worktrees
+.claude/worktrees/
